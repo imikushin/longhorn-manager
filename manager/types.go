@@ -24,6 +24,9 @@ type VolumeManager interface {
 	Get(name string) (*VolumeInfo, error)
 	Attach(name string) error
 	Detach(name string) error
+
+	MonitorVolume(volume *VolumeInfo)
+	Cleanup(volume *VolumeInfo)
 }
 
 type Orchestrator interface {
@@ -38,7 +41,6 @@ type Orchestrator interface {
 	StartContainer(containerID string) error
 	StopContainer(containerID string) error
 	RemoveContainer(containerID string) error
-	RemoveStaleReplicas(volumeName string) error
 }
 
 type VolumeInfo struct {
