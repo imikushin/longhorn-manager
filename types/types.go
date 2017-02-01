@@ -29,24 +29,30 @@ type VolumeManager interface {
 	Cleanup(volume *VolumeInfo)
 }
 
+type ControllerHost interface {
+	WaitForDevice(name string) error
+}
+
 type Orchestrator interface {
 	CreateVolumeRecord(volume *VolumeInfo) (*VolumeInfo, error)
 	DeleteVolumeRecord(volumeName string) error
 	GetVolumeRecord(volumeName string) (*VolumeInfo, error)
 	MarkBadReplica(containerID string) error
 
-	CreateController(volumeName, hostID string) (*ContainerInfo, error)
+	CreateController(volumeName, hostID string, replicas []*ContainerInfo) (*ContainerInfo, error)
 	CreateReplica(volume *VolumeInfo) (*ContainerInfo, error)
 
 	StartContainer(containerID string) error
 	StopContainer(containerID string) error
 	RemoveContainer(containerID string) error
+
+	GetThisHostID() (string, error)
 }
 
 type VolumeInfo struct {
 	Name                string
 	Size                int64
-	NumberOfReplicas    int64
+	NumberOfReplicas    int
 	StaleReplicaTimeout time.Duration
 	Controller          *ContainerInfo
 	Replicas            []*ContainerInfo
@@ -56,6 +62,6 @@ type VolumeInfo struct {
 type ContainerInfo struct {
 	ID           string
 	HostID       string
-	Running      *bool
+	Running      bool
 	BadTimestamp *time.Time
 }
