@@ -7,6 +7,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/rancher/longhorn-orc/driver"
+	"github.com/rancher/longhorn-orc/manager"
 	"github.com/rancher/longhorn-orc/storagepool"
 )
 
@@ -16,6 +17,7 @@ func main() {
 	app := cli.NewApp()
 	app.Version = VERSION
 	app.Usage = "Rancher Longhorn storage driver/orchestration"
+	app.Action = manager.RunManager
 
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
