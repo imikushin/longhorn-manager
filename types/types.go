@@ -32,9 +32,7 @@ type VolumeManager interface {
 
 type MonitorVolume func(name string, man VolumeManager) io.Closer
 
-type ControllerHost interface {
-	WaitForDevice(name string) error
-}
+type WaitForDevice func(name string) error
 
 type Orchestrator interface {
 	CreateVolumeRecord(volume *VolumeInfo) (*VolumeInfo, error)

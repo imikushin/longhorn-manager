@@ -12,8 +12,7 @@ import (
 )
 
 func RunManager(c *cli.Context) error {
-	orch := cattle.New(c)
-	man := New(orch, ThisHost(), MonitorVolume)
+	man := New(cattle.New(c), WaitForDevice, MonitorVolume)
 
 	go serveAPI(man)
 
@@ -24,23 +23,23 @@ type volumeManager struct {
 	sync.Mutex
 	mons map[string]io.Closer
 
-	orc    types.Orchestrator
-	host   types.ControllerHost
-	hostID string
-	monVol types.MonitorVolume
+	orc     types.Orchestrator
+	waitDev types.WaitForDevice
+	hostID  string
+	monVol  types.MonitorVolume
 }
 
-func New(orc types.Orchestrator, host types.ControllerHost, monVol types.MonitorVolume) types.VolumeManager {
+func New(orc types.Orchestrator, waitDev types.WaitForDevice, monVol types.MonitorVolume) types.VolumeManager {
 	hostID, err := orc.GetThisHostID()
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get this host ID from the orchestrator"))
 	}
 	return &volumeManager{
-		mons:   map[string]io.Closer{},
-		orc:    orc,
-		host:   host,
-		hostID: hostID,
-		monVol: monVol,
+		mons:    map[string]io.Closer{},
+		orc:     orc,
+		waitDev: waitDev,
+		hostID:  hostID,
+		monVol:  monVol,
 	}
 }
 
@@ -113,7 +112,7 @@ func (man *volumeManager) Attach(name string) error {
 	if _, err := man.orc.CreateController(vol.Name, man.hostID, replicas); err != nil {
 		return errors.Wrapf(err, "failed to start the controller for volume '%s'", vol.Name)
 	}
-	if err := man.host.WaitForDevice(vol.Name); err != nil {
+	if err := man.waitDev(vol.Name); err != nil {
 		return errors.Wrapf(err, "error waiting for device for volume '%s'", vol.Name)
 	}
 
