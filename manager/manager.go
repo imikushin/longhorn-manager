@@ -3,6 +3,7 @@ package manager
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	"github.com/rancher/longhorn-orc/controller"
 	"github.com/rancher/longhorn-orc/orch/cattle"
 	"github.com/rancher/longhorn-orc/types"
 	"github.com/rancher/longhorn-orc/util/daemon"
@@ -12,7 +13,7 @@ import (
 )
 
 func RunManager(c *cli.Context) error {
-	man := New(cattle.New(c), WaitForDevice, MonitorVolume)
+	man := New(cattle.New(c), WaitForDevice, Monitor, controller.New)
 
 	go serveAPI(man)
 
@@ -21,25 +22,28 @@ func RunManager(c *cli.Context) error {
 
 type volumeManager struct {
 	sync.Mutex
-	mons map[string]io.Closer
 
-	hostID  string
-	orc     types.Orchestrator
-	waitDev types.WaitForDevice
-	monVol  types.MonitorVolume
+	monitors map[string]io.Closer
+
+	hostID        string
+	orc           types.Orchestrator
+	waitForDevice types.WaitForDevice
+	monitor       types.Monitor
+	getController types.GetController
 }
 
-func New(orc types.Orchestrator, waitDev types.WaitForDevice, monVol types.MonitorVolume) types.VolumeManager {
+func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Monitor, getController types.GetController) types.VolumeManager {
 	hostID, err := orc.GetThisHostID()
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get this host ID from the orchestrator"))
 	}
 	return &volumeManager{
-		mons:    map[string]io.Closer{},
-		hostID:  hostID,
-		orc:     orc,
-		waitDev: waitDev,
-		monVol:  monVol,
+		monitors:      map[string]io.Closer{},
+		hostID:        hostID,
+		orc:           orc,
+		waitForDevice: waitDev,
+		monitor:       monitor,
+		getController: getController,
 	}
 }
 
@@ -55,20 +59,20 @@ func (man *volumeManager) Get(name string) (*types.VolumeInfo, error) {
 	return nil, nil
 }
 
-func (man *volumeManager) startMonitoring(name string) {
+func (man *volumeManager) startMonitoring(controllerInfo *types.ControllerInfo) {
 	man.Lock()
 	defer man.Unlock()
-	if man.mons[name] == nil {
-		man.mons[name] = man.monVol(name, man)
+	if man.monitors[controllerInfo.Name] == nil {
+		man.monitors[controllerInfo.Name] = man.monitor(man.getController(controllerInfo), man)
 	}
 }
 
-func (man *volumeManager) stopMonitoring(name string) {
+func (man *volumeManager) stopMonitoring(controllerInfo *types.ControllerInfo) {
 	man.Lock()
 	defer man.Unlock()
-	if mon := man.mons[name]; mon != nil {
+	if mon := man.monitors[controllerInfo.Name]; mon != nil {
 		mon.Close()
-		delete(man.mons, name)
+		delete(man.monitors, controllerInfo.Name)
 	}
 }
 
@@ -79,13 +83,13 @@ func (man *volumeManager) Attach(name string) error {
 	}
 	if vol.Controller != nil && vol.Controller.Running {
 		if vol.Controller.HostID == man.hostID {
-			man.startMonitoring(name)
+			man.startMonitoring(vol.Controller)
 			return nil
 		}
 		return errors.Errorf("volume already attached to host '%s'", vol.Controller.HostID)
 	}
-	replicas := []*types.ContainerInfo{}
-	var mostRecentBadReplica *types.ContainerInfo
+	replicas := []*types.ReplicaInfo{}
+	var mostRecentBadReplica *types.ReplicaInfo
 	for _, replica := range vol.Replicas {
 		if replica.Running {
 			if err := man.orc.StopContainer(replica.ID); err != nil {
@@ -109,14 +113,15 @@ func (man *volumeManager) Attach(name string) error {
 			return errors.Wrapf(err, "failed to start replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, vol.Name)
 		}
 	}
-	if _, err := man.orc.CreateController(vol.Name, man.hostID, replicas); err != nil {
+	controllerInfo, err := man.orc.CreateController(vol.Name, man.hostID, replicas)
+	if err != nil {
 		return errors.Wrapf(err, "failed to start the controller for volume '%s'", vol.Name)
 	}
-	if err := man.waitDev(vol.Name); err != nil {
+	if err := man.waitForDevice(vol.Name); err != nil {
 		return errors.Wrapf(err, "error waiting for device for volume '%s'", vol.Name)
 	}
 
-	man.startMonitoring(name)
+	man.startMonitoring(controllerInfo)
 	return nil
 }
 
@@ -124,7 +129,8 @@ func (man *volumeManager) Detach(name string) error {
 	return nil
 }
 
-func (man *volumeManager) CheckVolume(volume *types.VolumeInfo) error {
+func (man *volumeManager) CheckController(controller types.Controller) error {
+	// TODO impl monitoring logic here
 	return nil
 }
 

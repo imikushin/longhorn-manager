@@ -28,11 +28,11 @@ func (orc *cattleOrc) MarkBadReplica(containerID string) error {
 	return nil
 }
 
-func (orc *cattleOrc) CreateController(volumeName, hostID string, replicas []*types.ContainerInfo) (*types.ContainerInfo, error) {
+func (orc *cattleOrc) CreateController(volumeName, hostID string, replicas []*types.ReplicaInfo) (*types.ControllerInfo, error) {
 	return nil, nil
 }
 
-func (orc *cattleOrc) CreateReplica(volume *types.VolumeInfo) (*types.ContainerInfo, error) {
+func (orc *cattleOrc) CreateReplica(volume *types.VolumeInfo) (*types.ReplicaInfo, error) {
 	return nil, nil
 }
 

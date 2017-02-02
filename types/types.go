@@ -19,6 +19,14 @@ const (
 	Degraded
 )
 
+type ReplicaState int
+
+const (
+	RW ReplicaState = iota
+	WO
+	ERR
+)
+
 type VolumeManager interface {
 	Create(volume *VolumeInfo) (*VolumeInfo, error)
 	Delete(name string) error
@@ -26,13 +34,20 @@ type VolumeManager interface {
 	Attach(name string) error
 	Detach(name string) error
 
-	CheckVolume(volume *VolumeInfo) error
+	CheckController(controller Controller) error // TODO change to monitor via controller API
 	Cleanup(volume *VolumeInfo) error
 }
 
-type MonitorVolume func(name string, man VolumeManager) io.Closer
+type Monitor func(controller Controller, man VolumeManager) io.Closer
 
 type WaitForDevice func(name string) error
+
+type GetController func(controllerInfo *ControllerInfo) Controller
+
+type Controller interface {
+	Name() string
+	GetReplicaStates() []*ReplicaInfo
+}
 
 type Orchestrator interface {
 	CreateVolumeRecord(volume *VolumeInfo) (*VolumeInfo, error)
@@ -40,8 +55,8 @@ type Orchestrator interface {
 	GetVolumeRecord(volumeName string) (*VolumeInfo, error)
 	MarkBadReplica(containerID string) error
 
-	CreateController(volumeName, hostID string, replicas []*ContainerInfo) (*ContainerInfo, error)
-	CreateReplica(volume *VolumeInfo) (*ContainerInfo, error)
+	CreateController(volumeName, hostID string, replicas []*ReplicaInfo) (*ControllerInfo, error)
+	CreateReplica(volume *VolumeInfo) (*ReplicaInfo, error)
 
 	StartContainer(containerID string) error
 	StopContainer(containerID string) error
@@ -55,14 +70,26 @@ type VolumeInfo struct {
 	Size                int64
 	NumberOfReplicas    int
 	StaleReplicaTimeout time.Duration
-	Controller          *ContainerInfo
-	Replicas            []*ContainerInfo
+	Controller          *ControllerInfo
+	Replicas            []*ReplicaInfo
 	State               *VolumeState
 }
 
 type ContainerInfo struct {
-	ID           string
-	HostID       string
-	Running      bool
+	ID      string
+	HostID  string
+	Running bool
+}
+
+type ControllerInfo struct {
+	ContainerInfo
+
+	Name string
+}
+
+type ReplicaInfo struct {
+	ContainerInfo
+
+	State        *ReplicaState
 	BadTimestamp *time.Time
 }
