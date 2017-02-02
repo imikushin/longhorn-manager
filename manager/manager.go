@@ -7,29 +7,47 @@ import (
 	"github.com/rancher/longhorn-orc/types"
 	"github.com/rancher/longhorn-orc/util/daemon"
 	"github.com/urfave/cli"
+	"sync"
 )
 
 func RunManager(c *cli.Context) error {
 	orch := cattle.New(c)
-	man := New(orch, ThisHost())
+	man := New(orch, ThisHost(), monitorVolume)
 
 	go serveAPI(man)
 
 	return daemon.WaitForExit()
 }
 
+func monitorVolume(name string, man volumeManager) types.MonitorChan {
+	monChan := make(chan struct{})
+	// TODO start monitoring
+
+	return monChan
+}
+
 type volumeManager struct {
+	sync.Mutex
+	chans map[string]types.MonitorChan
+
 	orc    types.Orchestrator
 	host   types.ControllerHost
 	hostID string
+	monVol types.MonitorVolume
 }
 
-func New(orc types.Orchestrator, host types.ControllerHost) types.VolumeManager {
+func New(orc types.Orchestrator, host types.ControllerHost, monVol types.MonitorVolume) types.VolumeManager {
 	hostID, err := orc.GetThisHostID()
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get this host ID from the orchestrator"))
 	}
-	return &volumeManager{orc: orc, hostID: hostID}
+	return &volumeManager{
+		chans:  map[string]types.MonitorChan{},
+		orc:    orc,
+		host:   host,
+		hostID: hostID,
+		monVol: monVol,
+	}
 }
 
 func (man *volumeManager) Create(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
@@ -44,6 +62,23 @@ func (man *volumeManager) Get(name string) (*types.VolumeInfo, error) {
 	return nil, nil
 }
 
+func (man *volumeManager) startMonitoring(name string) {
+	man.Lock()
+	defer man.Unlock()
+	if man.chans[name] == nil {
+		man.chans[name] = man.monVol(name, man)
+	}
+}
+
+func (man *volumeManager) stopMonitoring(name string) {
+	man.Lock()
+	defer man.Unlock()
+	if monChan := man.chans[name]; monChan != nil {
+		close(monChan)
+		delete(man.chans, name)
+	}
+}
+
 func (man *volumeManager) Attach(name string) error {
 	vol, err := man.Get(name)
 	if err != nil {
@@ -51,6 +86,7 @@ func (man *volumeManager) Attach(name string) error {
 	}
 	if vol.Controller != nil && vol.Controller.Running {
 		if vol.Controller.HostID == man.hostID {
+			man.startMonitoring(name)
 			return nil
 		}
 		return errors.Errorf("volume already attached to host '%s'", vol.Controller.HostID)
@@ -87,8 +123,7 @@ func (man *volumeManager) Attach(name string) error {
 		return errors.Wrapf(err, "error waiting for device for volume '%s'", vol.Name)
 	}
 
-	// TODO Start monitoring the controller (see Maintain volume health)
-
+	man.startMonitoring(name)
 	return nil
 }
 

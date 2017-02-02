@@ -25,9 +25,12 @@ type VolumeManager interface {
 	Attach(name string) error
 	Detach(name string) error
 
-	MonitorVolume(volume *VolumeInfo)
+	CheckVolume(volume *VolumeInfo)
 	Cleanup(volume *VolumeInfo)
 }
+
+type MonitorChan chan<- struct{}
+type MonitorVolume func(name string, man VolumeManager) MonitorChan
 
 type ControllerHost interface {
 	WaitForDevice(name string) error
