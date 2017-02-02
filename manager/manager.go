@@ -23,9 +23,9 @@ type volumeManager struct {
 	sync.Mutex
 	mons map[string]io.Closer
 
+	hostID  string
 	orc     types.Orchestrator
 	waitDev types.WaitForDevice
-	hostID  string
 	monVol  types.MonitorVolume
 }
 
@@ -36,9 +36,9 @@ func New(orc types.Orchestrator, waitDev types.WaitForDevice, monVol types.Monit
 	}
 	return &volumeManager{
 		mons:    map[string]io.Closer{},
+		hostID:  hostID,
 		orc:     orc,
 		waitDev: waitDev,
-		hostID:  hostID,
 		monVol:  monVol,
 	}
 }
