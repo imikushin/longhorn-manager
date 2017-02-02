@@ -1,6 +1,7 @@
 package types
 
 import (
+	"io"
 	"time"
 )
 
@@ -25,12 +26,11 @@ type VolumeManager interface {
 	Attach(name string) error
 	Detach(name string) error
 
-	CheckVolume(volume *VolumeInfo)
-	Cleanup(volume *VolumeInfo)
+	CheckVolume(volume *VolumeInfo) error
+	Cleanup(volume *VolumeInfo) error
 }
 
-type MonitorChan chan<- struct{}
-type MonitorVolume func(name string, man VolumeManager) MonitorChan
+type MonitorVolume func(name string, man VolumeManager) io.Closer
 
 type ControllerHost interface {
 	WaitForDevice(name string) error

@@ -47,3 +47,7 @@ func (orc *cattleOrc) StopContainer(containerID string) error {
 func (orc *cattleOrc) RemoveContainer(containerID string) error {
 	return nil
 }
+
+func (orc *cattleOrc) GetThisHostID() (string, error) {
+	return "DUMMY", nil
+}

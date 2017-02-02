@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/longhorn-orc/types"
 	"github.com/rancher/longhorn-orc/util/daemon"
 	"github.com/urfave/cli"
+	"io"
 	"sync"
 )
 
@@ -19,16 +20,36 @@ func RunManager(c *cli.Context) error {
 	return daemon.WaitForExit()
 }
 
-func monitorVolume(name string, man volumeManager) types.MonitorChan {
-	monChan := make(chan struct{})
-	// TODO start monitoring
+type monitorChan chan<- struct{}
 
-	return monChan
+func (mc monitorChan) Close() error {
+	close(mc)
+	return nil
+}
+
+func monitorVolume(name string, man types.VolumeManager) io.Closer {
+	ch := make(chan struct{})
+	go doMonitorVolume(name, man, ch)
+	return monitorChan(ch)
+}
+
+func doMonitorVolume(name string, man types.VolumeManager, ch chan struct{}) {
+	// TODO perform checks in regular intervals
+	for range ch {
+		vol, err := man.Get(name)
+		if err != nil {
+			logrus.Errorf("%+v", errors.Wrapf(err, "monitoring: error getting volume '%s'", name))
+			continue
+		}
+		if err := man.CheckVolume(vol); err != nil {
+			logrus.Errorf("%+v", errors.Wrapf(err, "monitoring: error checking volume '%s'", name))
+		}
+	}
 }
 
 type volumeManager struct {
 	sync.Mutex
-	chans map[string]types.MonitorChan
+	mons map[string]io.Closer
 
 	orc    types.Orchestrator
 	host   types.ControllerHost
@@ -42,7 +63,7 @@ func New(orc types.Orchestrator, host types.ControllerHost, monVol types.Monitor
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get this host ID from the orchestrator"))
 	}
 	return &volumeManager{
-		chans:  map[string]types.MonitorChan{},
+		mons:   map[string]io.Closer{},
 		orc:    orc,
 		host:   host,
 		hostID: hostID,
@@ -65,17 +86,17 @@ func (man *volumeManager) Get(name string) (*types.VolumeInfo, error) {
 func (man *volumeManager) startMonitoring(name string) {
 	man.Lock()
 	defer man.Unlock()
-	if man.chans[name] == nil {
-		man.chans[name] = man.monVol(name, man)
+	if man.mons[name] == nil {
+		man.mons[name] = man.monVol(name, man)
 	}
 }
 
 func (man *volumeManager) stopMonitoring(name string) {
 	man.Lock()
 	defer man.Unlock()
-	if monChan := man.chans[name]; monChan != nil {
-		close(monChan)
-		delete(man.chans, name)
+	if mon := man.mons[name]; mon != nil {
+		mon.Close()
+		delete(man.mons, name)
 	}
 }
 
@@ -101,7 +122,7 @@ func (man *volumeManager) Attach(name string) error {
 		}
 		if replica.BadTimestamp == nil {
 			replicas = append(replicas, replica)
-		} else if mostRecentBadReplica == nil || replica.BadTimestamp.After(mostRecentBadReplica.BadTimestamp) {
+		} else if mostRecentBadReplica == nil || replica.BadTimestamp.After(*mostRecentBadReplica.BadTimestamp) {
 			mostRecentBadReplica = replica
 		}
 	}
@@ -131,8 +152,10 @@ func (man *volumeManager) Detach(name string) error {
 	return nil
 }
 
-func (man *volumeManager) MonitorVolume(volume *types.VolumeInfo) {
+func (man *volumeManager) CheckVolume(volume *types.VolumeInfo) error {
+	return nil
 }
 
-func (man *volumeManager) Cleanup(volume *types.VolumeInfo) {
+func (man *volumeManager) Cleanup(volume *types.VolumeInfo) error {
+	return nil
 }
