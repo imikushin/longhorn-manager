@@ -13,6 +13,6 @@ func (c *controller) Name() string {
 	return "DUMMY"
 }
 
-func (c *controller) GetReplicaStates() []*types.ReplicaInfo {
-	return nil
+func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
+	return nil, nil
 }

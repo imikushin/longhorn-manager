@@ -34,11 +34,11 @@ type VolumeManager interface {
 	Attach(name string) error
 	Detach(name string) error
 
-	CheckController(controller Controller) error // TODO change to monitor via controller API
+	CheckController(volume *VolumeInfo) error
 	Cleanup(volume *VolumeInfo) error
 }
 
-type Monitor func(controller Controller, man VolumeManager) io.Closer
+type Monitor func(volume *VolumeInfo, man VolumeManager) io.Closer
 
 type WaitForDevice func(name string) error
 
@@ -46,7 +46,7 @@ type GetController func(controllerInfo *ControllerInfo) Controller
 
 type Controller interface {
 	Name() string
-	GetReplicaStates() []*ReplicaInfo
+	GetReplicaStates() ([]*ReplicaInfo, error)
 }
 
 type Orchestrator interface {
@@ -90,6 +90,7 @@ type ControllerInfo struct {
 type ReplicaInfo struct {
 	ContainerInfo
 
+	Address      string
 	State        *ReplicaState
 	BadTimestamp *time.Time
 }

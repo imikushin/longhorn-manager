@@ -59,41 +59,41 @@ func (man *volumeManager) Get(name string) (*types.VolumeInfo, error) {
 	return nil, nil
 }
 
-func (man *volumeManager) startMonitoring(controllerInfo *types.ControllerInfo) {
+func (man *volumeManager) startMonitoring(volume *types.VolumeInfo) {
 	man.Lock()
 	defer man.Unlock()
-	if man.monitors[controllerInfo.Name] == nil {
-		man.monitors[controllerInfo.Name] = man.monitor(man.getController(controllerInfo), man)
+	if man.monitors[volume.Name] == nil {
+		man.monitors[volume.Name] = man.monitor(volume, man)
 	}
 }
 
-func (man *volumeManager) stopMonitoring(controllerInfo *types.ControllerInfo) {
+func (man *volumeManager) stopMonitoring(volume *types.VolumeInfo) {
 	man.Lock()
 	defer man.Unlock()
-	if mon := man.monitors[controllerInfo.Name]; mon != nil {
+	if mon := man.monitors[volume.Name]; mon != nil {
 		mon.Close()
-		delete(man.monitors, controllerInfo.Name)
+		delete(man.monitors, volume.Name)
 	}
 }
 
 func (man *volumeManager) Attach(name string) error {
-	vol, err := man.Get(name)
+	volume, err := man.Get(name)
 	if err != nil {
 		return err
 	}
-	if vol.Controller != nil && vol.Controller.Running {
-		if vol.Controller.HostID == man.hostID {
-			man.startMonitoring(vol.Controller)
+	if volume.Controller != nil && volume.Controller.Running {
+		if volume.Controller.HostID == man.hostID {
+			man.startMonitoring(volume)
 			return nil
 		}
-		return errors.Errorf("volume already attached to host '%s'", vol.Controller.HostID)
+		return errors.Errorf("volume already attached to host '%s'", volume.Controller.HostID)
 	}
 	replicas := []*types.ReplicaInfo{}
 	var mostRecentBadReplica *types.ReplicaInfo
-	for _, replica := range vol.Replicas {
+	for _, replica := range volume.Replicas {
 		if replica.Running {
 			if err := man.orc.StopContainer(replica.ID); err != nil {
-				return errors.Wrapf(err, "failed to stop replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, vol.Name)
+				return errors.Wrapf(err, "failed to stop replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, volume.Name)
 			}
 		}
 		if replica.BadTimestamp == nil {
@@ -106,22 +106,23 @@ func (man *volumeManager) Attach(name string) error {
 		replicas = append(replicas, mostRecentBadReplica)
 	}
 	if len(replicas) == 0 {
-		return errors.Errorf("no replicas to start the controller for volume '%s'", vol.Name)
+		return errors.Errorf("no replicas to start the controller for volume '%s'", volume.Name)
 	}
 	for _, replica := range replicas {
 		if err := man.orc.StartContainer(replica.ID); err != nil {
-			return errors.Wrapf(err, "failed to start replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, vol.Name)
+			return errors.Wrapf(err, "failed to start replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, volume.Name)
 		}
 	}
-	controllerInfo, err := man.orc.CreateController(vol.Name, man.hostID, replicas)
+	controllerInfo, err := man.orc.CreateController(volume.Name, man.hostID, replicas)
 	if err != nil {
-		return errors.Wrapf(err, "failed to start the controller for volume '%s'", vol.Name)
+		return errors.Wrapf(err, "failed to start the controller for volume '%s'", volume.Name)
 	}
-	if err := man.waitForDevice(vol.Name); err != nil {
-		return errors.Wrapf(err, "error waiting for device for volume '%s'", vol.Name)
+	if err := man.waitForDevice(volume.Name); err != nil {
+		return errors.Wrapf(err, "error waiting for device for volume '%s'", volume.Name)
 	}
 
-	man.startMonitoring(controllerInfo)
+	volume.Controller = controllerInfo
+	man.startMonitoring(volume)
 	return nil
 }
 
@@ -129,8 +130,24 @@ func (man *volumeManager) Detach(name string) error {
 	return nil
 }
 
-func (man *volumeManager) CheckController(controller types.Controller) error {
-	// TODO impl monitoring logic here
+func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
+	ctrl := man.getController(volume.Controller)
+	replicas, err := ctrl.GetReplicaStates()
+	if err != nil {
+		return errors.Wrapf(err, "error getting replica states for volume '%s'", ctrl.Name())
+	}
+	goodReplicas := []*types.ReplicaInfo{}
+	for _, replica := range replicas {
+		if replica.State != nil && *replica.State == types.RW {
+			goodReplicas = append(goodReplicas, replica)
+		}
+	}
+	if len(goodReplicas) == 0 {
+		return man.Detach(ctrl.Name())
+	}
+
+	// TODO more stuff here
+
 	return nil
 }
 
