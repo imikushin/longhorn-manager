@@ -5,23 +5,32 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rancher/longhorn-orc/types"
 	"io"
+	"time"
 )
 
-type monitorChan chan<- struct{}
+var (
+	MonitoringPeriod = time.Second * 5
+)
+
+type monitorChan chan<- Event
 
 func (mc monitorChan) Close() error {
+	defer func() {
+		recover()
+	}()
 	close(mc)
 	return nil
 }
 
 func MonitorVolume(name string, man types.VolumeManager) io.Closer {
-	ch := make(chan struct{})
+	ch := make(chan Event)
 	go doMonitorVolume(name, man, ch)
 	return monitorChan(ch)
 }
 
-func doMonitorVolume(name string, man types.VolumeManager, ch chan struct{}) {
-	// TODO perform checks in regular intervals
+func doMonitorVolume(name string, man types.VolumeManager, ch chan Event) {
+	ticker := NewTicker(MonitoringPeriod, ch)
+	go Send(ch, ticker.NewTick())
 	for range ch {
 		vol, err := man.Get(name)
 		if err != nil {
