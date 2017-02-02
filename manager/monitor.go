@@ -29,8 +29,7 @@ func MonitorVolume(name string, man types.VolumeManager) io.Closer {
 }
 
 func doMonitorVolume(name string, man types.VolumeManager, ch chan Event) {
-	ticker := NewTicker(MonitoringPeriod, ch)
-	go Send(ch, ticker.NewTick())
+	defer NewTicker(MonitoringPeriod, ch).Start().Stop()
 	for range ch {
 		vol, err := man.Get(name)
 		if err != nil {
