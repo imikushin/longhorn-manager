@@ -24,7 +24,7 @@ func (orc *cattleOrc) GetVolumeRecord(volumeName string) (*types.VolumeInfo, err
 	return nil, nil
 }
 
-func (orc *cattleOrc) MarkBadReplica(containerID string) error {
+func (orc *cattleOrc) MarkBadReplica(replica *types.ReplicaInfo) error {
 	return nil
 }
 

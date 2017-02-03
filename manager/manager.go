@@ -163,22 +163,41 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 		return errors.Wrapf(err, "error getting replica states for volume '%s'", volume.Name)
 	}
 	goodReplicas := []*types.ReplicaInfo{}
+	woReplicas := []*types.ReplicaInfo{}
+	removeErrs := make(chan error, len(replicas))
+	removeOps := &sync.WaitGroup{}
 	for _, replica := range replicas {
-		if replica.State == types.RW {
+		switch replica.State {
+		case types.RW:
 			goodReplicas = append(goodReplicas, replica)
+		case types.WO:
+			woReplicas = append(woReplicas, replica)
+		case types.ERR:
+			removeOps.Add(1)
+			go func(replica *types.ReplicaInfo) {
+				defer removeOps.Done()
+				if err := ctrl.RemoveReplica(replica); err != nil {
+					removeErrs <- errors.Wrapf(err, "failed to remove ERR replica '%s' from volume '%s'", replica.Address, volume.Name)
+					return
+				}
+				if err := man.orc.MarkBadReplica(replica); err != nil {
+					removeErrs <- errors.Wrapf(err, "failed to mark replica '%s' bad for volume '%s'", replica.Address, volume.Name)
+				}
+			}(replica)
 		}
+	}
+	go func() {
+		removeOps.Wait()
+		close(removeErrs)
+	}()
+	for err := range removeErrs {
+		return err
 	}
 	if len(goodReplicas) == 0 {
 		logrus.Errorf("volume '%s' has no more good replicas, shutting it down", volume.Name)
 		return man.Detach(volume.Name)
 	}
 
-	woReplicas := []*types.ReplicaInfo{}
-	for _, replica := range replicas {
-		if replica.State == types.WO {
-			woReplicas = append(woReplicas, replica)
-		}
-	}
 	addingReplicas := man.addingReplicasCount(volume.Name, 0)
 	if len(goodReplicas)+len(woReplicas)+addingReplicas < volume.NumberOfReplicas {
 		if err := man.createAndAddReplicaToController(volume.Name, ctrl); err != nil {
@@ -187,17 +206,6 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 	}
 	if len(goodReplicas)+len(woReplicas)+addingReplicas > volume.NumberOfReplicas {
 		logrus.Errorf("volume '%s' has more replicas than needed: has %v, needs %v", volume.Name, len(goodReplicas), volume.NumberOfReplicas)
-	}
-
-	errReplicas := []*types.ReplicaInfo{}
-	for _, replica := range replicas {
-		if replica.State == types.ERR {
-			errReplicas = append(errReplicas, replica)
-		}
-	}
-	if len(errReplicas) > 0 {
-		// TODO impl
-		//man.remove
 	}
 
 	return nil
