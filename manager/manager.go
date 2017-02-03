@@ -138,6 +138,43 @@ func (man *volumeManager) Attach(name string) error {
 }
 
 func (man *volumeManager) Detach(name string) error {
+	volume, err := man.Get(name)
+	if err != nil {
+		return err
+	}
+	man.stopMonitoring(volume)
+	errCh := make(chan error)
+	wg := &sync.WaitGroup{}
+	if volume.Controller != nil && volume.Controller.Running {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := man.orc.RemoveContainer(volume.Controller.ID); err != nil {
+				errCh <- errors.Wrapf(err, "failed to remove controller '%s' from volume '%s'", volume.Controller.ID, volume.Name)
+			}
+		}()
+	}
+	for _, replica := range volume.Replicas {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := man.orc.StopContainer(replica.ID); err != nil {
+				errCh <- errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.ID, volume.Name)
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+	errs := Errs{}
+	for err := range errCh {
+		errs = append(errs, err)
+		logrus.Errorf("%+v", err)
+	}
+	if len(errs) > 0 {
+		return errs
+	}
 	return nil
 }
 
@@ -198,13 +235,13 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 		wg.Wait()
 		close(errCh)
 	}()
-	errs := []error{}
+	errs := Errs{}
 	for err := range errCh {
 		errs = append(errs, err)
 		logrus.Errorf("%+v", err)
 	}
 	if len(errs) > 0 {
-		return errs[0]
+		return errs
 	}
 	if len(goodReplicas) == 0 {
 		logrus.Errorf("volume '%s' has no more good replicas, shutting it down", volume.Name)
