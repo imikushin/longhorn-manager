@@ -9,7 +9,8 @@ import (
 )
 
 var (
-	MonitoringPeriod = time.Second * 5
+	MonitoringPeriod     = time.Second * 5
+	MonitoringMaxRetries = 3
 )
 
 type monitorChan chan<- Event
@@ -29,14 +30,27 @@ func Monitor(volume *types.VolumeInfo, man types.VolumeManager) io.Closer {
 }
 
 func monitor(volume *types.VolumeInfo, man types.VolumeManager, ch chan Event) {
-	defer NewTicker(MonitoringPeriod, ch).Start().Stop()
+	ticker := NewTicker(MonitoringPeriod, ch)
+	defer ticker.Start().Stop()
+	failedAttempts := 0
 	for range ch {
-		if err := man.CheckController(volume); err != nil {
-			logrus.Errorf("%+v", errors.Wrapf(err, "monitoring: failed checking controller '%s', detaching volume", volume.Name))
-			if err := man.Detach(volume.Name); err != nil {
-				logrus.Errorf("%+v", errors.Wrapf(err, "monitoring: error detaching failed volume '%s'", volume.Name))
+		if err := func() error {
+			defer ticker.Stop().Start()
+			if err := man.CheckController(volume); err != nil {
+				if failedAttempts++; failedAttempts > MonitoringMaxRetries {
+					return errors.Wrapf(err, "failed checking controller '%s'", volume.Name)
+				}
+				logrus.Warnf("%+v", errors.Wrapf(err, "failed checking controller '%s', going to retry", volume.Name))
+				return nil
 			}
-			break
+			failedAttempts = 0
+			return nil
+		}(); err != nil {
+			close(ch)
+			logrus.Error(errors.Wrapf(err, "detaching volume"))
+			if err := man.Detach(volume.Name); err != nil {
+				logrus.Errorf("%+v", errors.Wrapf(err, "error detaching failed volume '%s'", volume.Name))
+			}
 		}
 	}
 }
