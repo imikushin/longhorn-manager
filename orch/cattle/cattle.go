@@ -12,15 +12,15 @@ func New(c *cli.Context) types.Orchestrator {
 	return &cattleOrc{}
 }
 
-func (orc *cattleOrc) CreateVolumeRecord(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
+func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
 	return nil, nil
 }
 
-func (orc *cattleOrc) DeleteVolumeRecord(volumeName string) error {
+func (orc *cattleOrc) DeleteVolume(volumeName string) error {
 	return nil
 }
 
-func (orc *cattleOrc) GetVolumeRecord(volumeName string) (*types.VolumeInfo, error) {
+func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 	return nil, nil
 }
 

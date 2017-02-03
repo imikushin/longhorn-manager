@@ -51,15 +51,23 @@ func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Moni
 }
 
 func (man *volumeManager) Create(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
-	return nil, nil
+	vol, err := man.orc.CreateVolume(volume)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create volume '%s'", volume.Name)
+	}
+	return vol, nil
 }
 
 func (man *volumeManager) Delete(name string) error {
-	return nil
+	return errors.Wrapf(man.orc.DeleteVolume(name), "failed to delete volume '%s'", name)
 }
 
 func (man *volumeManager) Get(name string) (*types.VolumeInfo, error) {
-	return nil, nil
+	vol, err := man.orc.GetVolume(name)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get volume '%s'", name)
+	}
+	return vol, nil
 }
 
 func (man *volumeManager) startMonitoring(volume *types.VolumeInfo) {
@@ -164,8 +172,8 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 	}
 	goodReplicas := []*types.ReplicaInfo{}
 	woReplicas := []*types.ReplicaInfo{}
-	removeErrs := make(chan error, len(replicas))
-	removeOps := &sync.WaitGroup{}
+	errCh := make(chan error)
+	wg := &sync.WaitGroup{}
 	for _, replica := range replicas {
 		switch replica.State {
 		case types.RW:
@@ -173,25 +181,30 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 		case types.WO:
 			woReplicas = append(woReplicas, replica)
 		case types.ERR:
-			removeOps.Add(1)
+			wg.Add(1)
 			go func(replica *types.ReplicaInfo) {
-				defer removeOps.Done()
+				defer wg.Done()
 				if err := ctrl.RemoveReplica(replica); err != nil {
-					removeErrs <- errors.Wrapf(err, "failed to remove ERR replica '%s' from volume '%s'", replica.Address, volume.Name)
+					errCh <- errors.Wrapf(err, "failed to remove ERR replica '%s' from volume '%s'", replica.Address, volume.Name)
 					return
 				}
 				if err := man.orc.MarkBadReplica(replica); err != nil {
-					removeErrs <- errors.Wrapf(err, "failed to mark replica '%s' bad for volume '%s'", replica.Address, volume.Name)
+					errCh <- errors.Wrapf(err, "failed to mark replica '%s' bad for volume '%s'", replica.Address, volume.Name)
 				}
 			}(replica)
 		}
 	}
 	go func() {
-		removeOps.Wait()
-		close(removeErrs)
+		wg.Wait()
+		close(errCh)
 	}()
-	for err := range removeErrs {
-		return err
+	errs := []error{}
+	for err := range errCh {
+		errs = append(errs, err)
+		logrus.Errorf("%+v", err)
+	}
+	if len(errs) > 0 {
+		return errs[0]
 	}
 	if len(goodReplicas) == 0 {
 		logrus.Errorf("volume '%s' has no more good replicas, shutting it down", volume.Name)
