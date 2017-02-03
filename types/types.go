@@ -93,6 +93,6 @@ type ReplicaInfo struct {
 	ContainerInfo
 
 	Address      string
-	State        *ReplicaState
+	State        ReplicaState
 	BadTimestamp *time.Time
 }
