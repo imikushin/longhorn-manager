@@ -32,7 +32,7 @@ func (orc *cattleOrc) CreateController(volumeName, hostID string, replicas []*ty
 	return nil, nil
 }
 
-func (orc *cattleOrc) CreateReplica(volume *types.VolumeInfo) (*types.ReplicaInfo, error) {
+func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, error) {
 	return nil, nil
 }
 

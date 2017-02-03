@@ -47,6 +47,8 @@ type GetController func(controllerInfo *ControllerInfo) Controller
 type Controller interface {
 	Name() string
 	GetReplicaStates() ([]*ReplicaInfo, error)
+	AddReplica(replica *ReplicaInfo) error
+	RemoveReplica(replica *ReplicaInfo) error
 }
 
 type Orchestrator interface {
@@ -56,7 +58,7 @@ type Orchestrator interface {
 	MarkBadReplica(containerID string) error
 
 	CreateController(volumeName, hostID string, replicas []*ReplicaInfo) (*ControllerInfo, error)
-	CreateReplica(volume *VolumeInfo) (*ReplicaInfo, error)
+	CreateReplica(volumeName string) (*ReplicaInfo, error)
 
 	StartContainer(containerID string) error
 	StopContainer(containerID string) error

@@ -16,3 +16,11 @@ func (c *controller) Name() string {
 func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
 	return nil, nil
 }
+
+func (c *controller) AddReplica(replica *types.ReplicaInfo) error {
+	return nil
+}
+
+func (c *controller) RemoveReplica(replica *types.ReplicaInfo) error {
+	return nil
+}

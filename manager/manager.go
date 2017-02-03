@@ -130,11 +130,20 @@ func (man *volumeManager) Detach(name string) error {
 	return nil
 }
 
+func (man *volumeManager) createAndAddReplicaToController(volumeName string, ctrl types.Controller) {
+	replica, err := man.orc.CreateReplica(volumeName)
+	if err != nil {
+		logrus.Errorf("%+v", errors.Wrapf(err, "failed to create replica for volume '%s'", volumeName))
+		return
+	}
+	ctrl.AddReplica(replica)
+}
+
 func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 	ctrl := man.getController(volume.Controller)
 	replicas, err := ctrl.GetReplicaStates()
 	if err != nil {
-		return errors.Wrapf(err, "error getting replica states for volume '%s'", ctrl.Name())
+		return errors.Wrapf(err, "error getting replica states for volume '%s'", volume.Name)
 	}
 	goodReplicas := []*types.ReplicaInfo{}
 	for _, replica := range replicas {
@@ -143,7 +152,20 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 		}
 	}
 	if len(goodReplicas) == 0 {
-		return man.Detach(ctrl.Name())
+		return man.Detach(volume.Name)
+	}
+
+	woReplicas := []*types.ReplicaInfo{}
+	for _, replica := range replicas {
+		if replica.State != nil && *replica.State == types.WO {
+			woReplicas = append(woReplicas, replica)
+		}
+	}
+	if len(goodReplicas) + len(woReplicas) < volume.NumberOfReplicas {
+		man.createAndAddReplicaToController(volume.Name, ctrl)
+	}
+	if len(goodReplicas) > volume.NumberOfReplicas {
+		logrus.Warnf("volume '%s' has more replicas than needed: has %v, needs %v", volume.Name, len(goodReplicas), volume.NumberOfReplicas)
 	}
 
 	// TODO more stuff here
