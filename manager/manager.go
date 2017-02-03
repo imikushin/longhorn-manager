@@ -23,7 +23,8 @@ func RunManager(c *cli.Context) error {
 type volumeManager struct {
 	sync.Mutex
 
-	monitors map[string]io.Closer
+	monitors       map[string]io.Closer
+	addingReplicas map[string]int
 
 	hostID        string
 	orc           types.Orchestrator
@@ -38,7 +39,9 @@ func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Moni
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get this host ID from the orchestrator"))
 	}
 	return &volumeManager{
-		monitors:      map[string]io.Closer{},
+		monitors:       map[string]io.Closer{},
+		addingReplicas: map[string]int{},
+
 		hostID:        hostID,
 		orc:           orc,
 		waitForDevice: waitDev,
@@ -135,7 +138,22 @@ func (man *volumeManager) createAndAddReplicaToController(volumeName string, ctr
 	if err != nil {
 		return errors.Wrapf(err, "failed to create a replica for volume '%s'", volumeName)
 	}
-	return errors.Wrapf(ctrl.AddReplica(replica), "failed to add replica '%s' to volume '%s'", replica.ID, volumeName)
+	go func() {
+		man.addingReplicasCount(volumeName, 1)
+		defer man.addingReplicasCount(volumeName, -1)
+		if err := ctrl.AddReplica(replica); err != nil {
+			logrus.Errorf("%+v", errors.Wrapf(err, "failed to add replica '%s' to volume '%s'", replica.ID, volumeName))
+		}
+	}()
+	return nil
+}
+
+func (man *volumeManager) addingReplicasCount(name string, add int) int {
+	man.Lock()
+	defer man.Unlock()
+	count := man.addingReplicas[name] + add
+	man.addingReplicas[name] = count
+	return count
 }
 
 func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
@@ -161,12 +179,13 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 			woReplicas = append(woReplicas, replica)
 		}
 	}
-	if len(goodReplicas)+len(woReplicas) < volume.NumberOfReplicas {
+	addingReplicas := man.addingReplicasCount(volume.Name, 0)
+	if len(goodReplicas)+len(woReplicas)+addingReplicas < volume.NumberOfReplicas {
 		if err := man.createAndAddReplicaToController(volume.Name, ctrl); err != nil {
 			return err
 		}
 	}
-	if len(goodReplicas)+len(woReplicas) > volume.NumberOfReplicas {
+	if len(goodReplicas)+len(woReplicas)+addingReplicas > volume.NumberOfReplicas {
 		logrus.Errorf("volume '%s' has more replicas than needed: has %v, needs %v", volume.Name, len(goodReplicas), volume.NumberOfReplicas)
 	}
 
@@ -178,6 +197,7 @@ func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
 	}
 	if len(errReplicas) > 0 {
 		// TODO impl
+		//man.remove
 	}
 
 	return nil
