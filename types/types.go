@@ -34,7 +34,7 @@ type VolumeManager interface {
 	Attach(name string) error
 	Detach(name string) error
 
-	CheckController(volume *VolumeInfo) error
+	CheckController(ctrl Controller, volume *VolumeInfo) error
 	Cleanup(volume *VolumeInfo) error
 }
 

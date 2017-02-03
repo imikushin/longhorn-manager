@@ -13,7 +13,7 @@ import (
 )
 
 func RunManager(c *cli.Context) error {
-	man := New(cattle.New(c), WaitForDevice, Monitor, controller.New)
+	man := New(cattle.New(c), WaitForDevice, Monitor(controller.New))
 
 	go serveAPI(man)
 
@@ -30,10 +30,9 @@ type volumeManager struct {
 	orc           types.Orchestrator
 	waitForDevice types.WaitForDevice
 	monitor       types.Monitor
-	getController types.GetController
 }
 
-func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Monitor, getController types.GetController) types.VolumeManager {
+func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Monitor) types.VolumeManager {
 	hostID, err := orc.GetThisHostID()
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get this host ID from the orchestrator"))
@@ -46,7 +45,6 @@ func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Moni
 		orc:           orc,
 		waitForDevice: waitDev,
 		monitor:       monitor,
-		getController: getController,
 	}
 }
 
@@ -201,8 +199,7 @@ func (man *volumeManager) addingReplicasCount(name string, add int) int {
 	return count
 }
 
-func (man *volumeManager) CheckController(volume *types.VolumeInfo) error {
-	ctrl := man.getController(volume.Controller)
+func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.VolumeInfo) error {
 	replicas, err := ctrl.GetReplicaStates()
 	if err != nil {
 		return errors.Wrapf(err, "error getting replica states for volume '%s'", volume.Name)

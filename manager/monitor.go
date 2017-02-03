@@ -23,20 +23,22 @@ func (mc monitorChan) Close() error {
 	return nil
 }
 
-func Monitor(volume *types.VolumeInfo, man types.VolumeManager) io.Closer {
-	ch := make(chan Event)
-	go monitor(volume, man, ch)
-	return monitorChan(ch)
+func Monitor(getController types.GetController) types.Monitor {
+	return func(volume *types.VolumeInfo, man types.VolumeManager) io.Closer {
+		ch := make(chan Event)
+		go monitor(getController(volume.Controller), volume, man, ch)
+		return monitorChan(ch)
+	}
 }
 
-func monitor(volume *types.VolumeInfo, man types.VolumeManager, ch chan Event) {
+func monitor(ctrl types.Controller, volume *types.VolumeInfo, man types.VolumeManager, ch chan Event) {
 	ticker := NewTicker(MonitoringPeriod, ch)
 	defer ticker.Start().Stop()
 	failedAttempts := 0
 	for range ch {
 		if err := func() error {
 			defer ticker.Stop().Start()
-			if err := man.CheckController(volume); err != nil {
+			if err := man.CheckController(ctrl, volume); err != nil {
 				if failedAttempts++; failedAttempts > MonitoringMaxRetries {
 					return errors.Wrapf(err, "failed checking controller '%s'", volume.Name)
 				}
