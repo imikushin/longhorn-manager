@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	MonitoringPeriod     = time.Second * 5
+	MonitoringPeriod     = time.Second * 1
 	MonitoringMaxRetries = 3
 )
 

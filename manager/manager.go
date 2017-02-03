@@ -246,13 +246,13 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	}
 
 	addingReplicas := man.addingReplicasCount(volume.Name, 0)
-	if len(goodReplicas)+len(woReplicas)+addingReplicas < volume.NumberOfReplicas {
+	if len(goodReplicas) < volume.NumberOfReplicas && len(woReplicas) == 0 && addingReplicas == 0 {
 		if err := man.createAndAddReplicaToController(volume.Name, ctrl); err != nil {
 			return err
 		}
 	}
-	if len(goodReplicas)+len(woReplicas)+addingReplicas > volume.NumberOfReplicas {
-		logrus.Errorf("volume '%s' has more replicas than needed: has %v, needs %v", volume.Name, len(goodReplicas), volume.NumberOfReplicas)
+	if len(goodReplicas)+len(woReplicas) > volume.NumberOfReplicas {
+		logrus.Warnf("volume '%s' has more replicas than needed: has %v, needs %v", volume.Name, len(goodReplicas), volume.NumberOfReplicas)
 	}
 
 	return nil
