@@ -26,7 +26,7 @@ func (mc monitorChan) Close() error {
 func Monitor(getController types.GetController) types.Monitor {
 	return func(volume *types.VolumeInfo, man types.VolumeManager) io.Closer {
 		ch := make(chan Event)
-		go monitor(getController(volume.Controller), volume, man, ch)
+		go monitor(getController(volume), volume, man, ch)
 		return monitorChan(ch)
 	}
 }

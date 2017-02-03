@@ -5,7 +5,7 @@ import "github.com/rancher/longhorn-orc/types"
 type controller struct {
 }
 
-func New(controllerInfo *types.ControllerInfo) types.Controller {
+func New(volume *types.VolumeInfo) types.Controller {
 	return nil
 }
 

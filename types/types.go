@@ -42,7 +42,7 @@ type Monitor func(volume *VolumeInfo, man VolumeManager) io.Closer
 
 type WaitForDevice func(name string) error
 
-type GetController func(controllerInfo *ControllerInfo) Controller
+type GetController func(volume *VolumeInfo) Controller
 
 type Controller interface {
 	Name() string
