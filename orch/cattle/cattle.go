@@ -53,7 +53,8 @@ func (orc *cattleOrc) MarkBadReplica(replica *types.ReplicaInfo) error {
 	return nil
 }
 
-func (orc *cattleOrc) CreateController(volumeName, hostID string, replicas []*types.ReplicaInfo) (*types.ControllerInfo, error) {
+func (orc *cattleOrc) CreateController(volumeName string, replicas []*types.ReplicaInfo) (*types.ControllerInfo, error) {
+	// create the controller on this host
 	return nil, nil
 }
 

@@ -26,7 +26,6 @@ type volumeManager struct {
 	monitors       map[string]io.Closer
 	addingReplicas map[string]int
 
-	hostID        string
 	orc           types.Orchestrator
 	waitForDevice types.WaitForDevice
 	monitor       types.Monitor
@@ -37,7 +36,6 @@ func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Moni
 		monitors:       map[string]io.Closer{},
 		addingReplicas: map[string]int{},
 
-		hostID:        orc.GetThisHostID(),
 		orc:           orc,
 		waitForDevice: waitDev,
 		monitor:       monitor,
@@ -87,7 +85,7 @@ func (man *volumeManager) Attach(name string) error {
 		return err
 	}
 	if volume.Controller != nil && volume.Controller.Running {
-		if volume.Controller.HostID == man.hostID {
+		if volume.Controller.HostID == man.orc.GetThisHostID() {
 			man.startMonitoring(volume)
 			return nil
 		}
@@ -118,7 +116,7 @@ func (man *volumeManager) Attach(name string) error {
 			return errors.Wrapf(err, "failed to start replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, volume.Name)
 		}
 	}
-	controllerInfo, err := man.orc.CreateController(volume.Name, man.hostID, replicas)
+	controllerInfo, err := man.orc.CreateController(volume.Name, replicas)
 	if err != nil {
 		return errors.Wrapf(err, "failed to start the controller for volume '%s'", volume.Name)
 	}
