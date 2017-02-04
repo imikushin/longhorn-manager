@@ -1,8 +1,8 @@
 package manager
 
 import (
-	"testing"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func TestSend(t *testing.T) {

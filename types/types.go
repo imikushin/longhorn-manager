@@ -80,6 +80,7 @@ type VolumeInfo struct {
 type ContainerInfo struct {
 	ID      string
 	HostID  string
+	Address string
 	Running bool
 }
 
@@ -92,7 +93,6 @@ type ControllerInfo struct {
 type ReplicaInfo struct {
 	ContainerInfo
 
-	Address      string
 	State        ReplicaState
 	BadTimestamp *time.Time
 }

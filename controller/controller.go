@@ -1,12 +1,19 @@
 package controller
 
-import "github.com/rancher/longhorn-orc/types"
+import (
+	"fmt"
+	"github.com/rancher/longhorn-orc/types"
+	"github.com/rancher/longhorn/sync"
+)
 
 type controller struct {
+	url string
 }
 
 func New(volume *types.VolumeInfo) types.Controller {
-	return nil
+	return &controller{
+		url: fmt.Sprintf("http://%s:9501", volume.Controller.Address),
+	}
 }
 
 func (c *controller) Name() string {
@@ -18,7 +25,7 @@ func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
 }
 
 func (c *controller) AddReplica(replica *types.ReplicaInfo) error {
-	return nil
+	return sync.NewTask(c.url).AddReplica(replica.Address)
 }
 
 func (c *controller) RemoveReplica(replica *types.ReplicaInfo) error {
