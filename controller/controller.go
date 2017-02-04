@@ -27,8 +27,27 @@ func (c *controller) Name() string {
 	return c.name
 }
 
+var modes = map[string]types.ReplicaMode{
+	"RW":  types.RW,
+	"WO":  types.WO,
+	"ERR": types.ERR,
+}
+
 func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
-	return nil, nil
+	rs, err := c.client.ListReplicas()
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get replicas from controller '%s'", c.name)
+	}
+	replicas := make([]*types.ReplicaInfo, len(rs))
+	for i, r := range rs {
+		replicas[i] = &types.ReplicaInfo{
+			ContainerInfo: types.ContainerInfo{
+				Address: r.Address,
+			},
+			Mode: modes[r.Mode],
+		}
+	}
+	return replicas, nil
 }
 
 func (c *controller) AddReplica(replica *types.ReplicaInfo) error {

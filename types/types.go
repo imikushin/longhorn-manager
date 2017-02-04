@@ -19,10 +19,10 @@ const (
 	Degraded
 )
 
-type ReplicaState int
+type ReplicaMode int
 
 const (
-	RW ReplicaState = iota
+	RW ReplicaMode = iota
 	WO
 	ERR
 )
@@ -93,6 +93,6 @@ type ControllerInfo struct {
 type ReplicaInfo struct {
 	ContainerInfo
 
-	State        ReplicaState
+	Mode         ReplicaMode
 	BadTimestamp *time.Time
 }

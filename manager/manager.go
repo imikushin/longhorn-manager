@@ -209,7 +209,7 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	errCh := make(chan error)
 	wg := &sync.WaitGroup{}
 	for _, replica := range replicas {
-		switch replica.State {
+		switch replica.Mode {
 		case types.RW:
 			goodReplicas = append(goodReplicas, replica)
 		case types.WO:
