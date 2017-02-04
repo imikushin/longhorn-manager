@@ -64,7 +64,7 @@ type Orchestrator interface {
 	StopContainer(containerID string) error
 	RemoveContainer(containerID string) error
 
-	GetThisHostID() (string, error)
+	GetThisHostID() string
 }
 
 type VolumeInfo struct {

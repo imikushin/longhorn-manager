@@ -33,15 +33,11 @@ type volumeManager struct {
 }
 
 func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Monitor) types.VolumeManager {
-	hostID, err := orc.GetThisHostID()
-	if err != nil {
-		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get this host ID from the orchestrator"))
-	}
 	return &volumeManager{
 		monitors:       map[string]io.Closer{},
 		addingReplicas: map[string]int{},
 
-		hostID:        hostID,
+		hostID:        orc.GetThisHostID(),
 		orc:           orc,
 		waitForDevice: waitDev,
 		monitor:       monitor,
