@@ -60,8 +60,9 @@ type Orchestrator interface {
 	CreateController(volumeName string, replicas []*ReplicaInfo) (*ControllerInfo, error)
 	CreateReplica(volumeName string) (*ReplicaInfo, error)
 
-	StartContainer(containerID string) error
-	StopContainer(containerID string) error
+	StartReplica(containerID string) error
+	StopReplica(containerID string) error
+
 	RemoveContainer(containerID string) error
 
 	GetThisHostID() string

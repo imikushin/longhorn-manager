@@ -95,7 +95,7 @@ func (man *volumeManager) Attach(name string) error {
 	var mostRecentBadReplica *types.ReplicaInfo
 	for _, replica := range volume.Replicas {
 		if replica.Running {
-			if err := man.orc.StopContainer(replica.ID); err != nil {
+			if err := man.orc.StopReplica(replica.ID); err != nil {
 				return errors.Wrapf(err, "failed to stop replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, volume.Name)
 			}
 		}
@@ -112,7 +112,7 @@ func (man *volumeManager) Attach(name string) error {
 		return errors.Errorf("no replicas to start the controller for volume '%s'", volume.Name)
 	}
 	for _, replica := range replicas {
-		if err := man.orc.StartContainer(replica.ID); err != nil {
+		if err := man.orc.StartReplica(replica.ID); err != nil {
 			return errors.Wrapf(err, "failed to start replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, volume.Name)
 		}
 	}
@@ -150,7 +150,7 @@ func (man *volumeManager) Detach(name string) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := man.orc.StopContainer(replica.ID); err != nil {
+			if err := man.orc.StopReplica(replica.ID); err != nil {
 				errCh <- errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.ID, volume.Name)
 			}
 		}()
