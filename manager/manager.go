@@ -3,22 +3,10 @@ package manager
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
-	"github.com/rancher/longhorn-orc/controller"
-	"github.com/rancher/longhorn-orc/orch/cattle"
 	"github.com/rancher/longhorn-orc/types"
-	"github.com/rancher/longhorn-orc/util/daemon"
-	"github.com/urfave/cli"
 	"io"
 	"sync"
 )
-
-func RunManager(c *cli.Context) error {
-	man := New(cattle.New(c), WaitForDevice, Monitor(controller.New))
-
-	go serveAPI(man)
-
-	return daemon.WaitForExit()
-}
 
 type volumeManager struct {
 	sync.Mutex

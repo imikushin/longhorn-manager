@@ -6,9 +6,12 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/urfave/cli"
 
+	"github.com/rancher/longhorn-orc/controller"
 	"github.com/rancher/longhorn-orc/driver"
 	"github.com/rancher/longhorn-orc/manager"
+	"github.com/rancher/longhorn-orc/orch/cattle"
 	"github.com/rancher/longhorn-orc/storagepool"
+	"github.com/rancher/longhorn-orc/util/daemon"
 )
 
 var VERSION = "0.1.0"
@@ -17,7 +20,7 @@ func main() {
 	app := cli.NewApp()
 	app.Version = VERSION
 	app.Usage = "Rancher Longhorn storage driver/orchestration"
-	app.Action = manager.RunManager
+	app.Action = RunManager
 
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
@@ -57,4 +60,12 @@ func main() {
 		logrus.Fatalf("Error running longhorn driver: %v", err)
 	}
 
+}
+
+func RunManager(c *cli.Context) error {
+	man := manager.New(cattle.New(c), manager.WaitForDevice, manager.Monitor(controller.New))
+
+	go manager.ServeAPI(man)
+
+	return daemon.WaitForExit()
 }

@@ -4,5 +4,5 @@ import (
 	"github.com/rancher/longhorn-orc/types"
 )
 
-func serveAPI(man types.VolumeManager) {
+func ServeAPI(man types.VolumeManager) {
 }
