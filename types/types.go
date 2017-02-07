@@ -74,7 +74,7 @@ type VolumeInfo struct {
 	NumberOfReplicas    int
 	StaleReplicaTimeout time.Duration
 	Controller          *ControllerInfo
-	Replicas            []*ReplicaInfo
+	Replicas            map[int]*ReplicaInfo
 	State               *VolumeState
 }
 
@@ -87,13 +87,12 @@ type ContainerInfo struct {
 
 type ControllerInfo struct {
 	ContainerInfo
-
-	Name string
 }
 
 type ReplicaInfo struct {
 	ContainerInfo
 
+	Name         string
 	Mode         ReplicaMode
 	BadTimestamp *time.Time
 }
