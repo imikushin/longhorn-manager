@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/longhorn-orc/orch/cattle"
 	"github.com/rancher/longhorn-orc/storagepool"
 	"github.com/rancher/longhorn-orc/util/daemon"
+	"github.com/rancher/longhorn-orc/orch"
 )
 
 var VERSION = "0.1.0"
@@ -41,6 +42,14 @@ func main() {
 			Name:   "cattle-secret-key",
 			Usage:  "The secret key required to authenticate with cattle server",
 			EnvVar: "CATTLE_SECRET_KEY",
+		},
+		cli.StringFlag{
+			Name:   orch.LonghornImageParam,
+			EnvVar: "LONGHORN_IMAGE",
+		},
+		cli.StringFlag{
+			Name:   orch.OrcImageParam,
+			EnvVar: "ORC_IMAGE",
 		},
 		cli.IntFlag{
 			Name:  "healthcheck-interval",
