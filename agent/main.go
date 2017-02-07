@@ -57,17 +57,14 @@ func runApp(context *cli.Context) error {
 	runReplica := context.GlobalBool("replica")
 
 	if runController {
-		go runPing(context)
 		go runControllerAPI(context)
-		c := controller.New()
-		defer c.Close()
-		return c.Start()
 	} else if runReplica {
 		go runReplicaAPI(context)
-		return runPing(context)
+	} else {
+		return nil
 	}
 
-	return nil
+	return <-make(chan error) // wait forever
 }
 
 func runControllerAPI(context *cli.Context) {
