@@ -129,7 +129,7 @@ controller:
     - /dev:/host/dev
     - /proc:/host/proc
     labels:
-        io.rancher.sidekicks: controller-agent, lhcmd
+        io.rancher.sidekicks: controller-agent
         io.rancher.container.hostname_override: container_name
         io.rancher.scheduler.affinity:container: $DRIVER_CONTAINER
     metadata:
@@ -151,15 +151,9 @@ controller-agent:
     metadata:
         volume:
           volume_name: $VOLUME_NAME
-    volumes_from: [lhcmd]
+    volumes_from: [controller]
     command:
     - longhorn-agent
     - --controller
-
-lhcmd:
-    image: $IMAGE
-    command: [sh]
-    stdin_open: true
-    tty: true
 `
 )
