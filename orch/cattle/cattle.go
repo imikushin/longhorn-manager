@@ -2,6 +2,7 @@ package cattle
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/cli/logger"
 	"github.com/docker/libcompose/config"
@@ -18,7 +19,6 @@ import (
 	"golang.org/x/net/context"
 	"strconv"
 	"text/template"
-	"fmt"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	dockerComposeTemplate *template.Template
+	dockerComposeTemplate  *template.Template
 	rancherComposeTemplate *template.Template
 )
 
@@ -144,10 +144,10 @@ func copyVolumeProperties(volume0 *types.VolumeInfo) *types.VolumeInfo {
 func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
 	volume = copyVolumeProperties(volume)
 	stack0 := &client.Stack{
-		Name:          volumeStackName(volume.Name),
-		ExternalId:    fmt.Sprintf("system://%s?name=%s", "rancher-longhorn", volume.Name),
-		Environment:   orc.Env,
-		Outputs:       map[string]interface{}{ // TODO add and use Metadata
+		Name:        volumeStackName(volume.Name),
+		ExternalId:  fmt.Sprintf("system://%s?name=%s", "rancher-longhorn", volume.Name),
+		Environment: orc.Env,
+		Outputs: map[string]interface{}{ // TODO add and use Metadata
 			LastReplicaIndexProp: strconv.Itoa(volume.NumberOfReplicas),
 		},
 	}
