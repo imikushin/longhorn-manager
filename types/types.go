@@ -60,10 +60,10 @@ type Orchestrator interface {
 	CreateController(volumeName string, replicas []*ReplicaInfo) (*ControllerInfo, error)
 	CreateReplica(volumeName string) (*ReplicaInfo, error)
 
-	StartReplica(containerID string) error
-	StopReplica(containerID string) error
+	StartReplica(instanceID string) error
+	StopReplica(instanceID string) error
 
-	RemoveContainer(containerID string) error
+	RemoveInstance(instanceID string) error
 
 	GetThisHostID() string
 }
@@ -78,7 +78,7 @@ type VolumeInfo struct {
 	State               *VolumeState
 }
 
-type ContainerInfo struct {
+type InstanceInfo struct {
 	ID      string
 	HostID  string
 	Address string
@@ -86,11 +86,11 @@ type ContainerInfo struct {
 }
 
 type ControllerInfo struct {
-	ContainerInfo
+	InstanceInfo
 }
 
 type ReplicaInfo struct {
-	ContainerInfo
+	InstanceInfo
 
 	Name         string
 	Mode         ReplicaMode

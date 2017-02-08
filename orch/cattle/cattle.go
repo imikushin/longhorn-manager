@@ -218,15 +218,15 @@ func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, erro
 	return nil, nil
 }
 
-func (orc *cattleOrc) StartReplica(containerID string) error {
+func (orc *cattleOrc) StartReplica(instanceID string) error {
 	return nil
 }
 
-func (orc *cattleOrc) StopReplica(containerID string) error {
+func (orc *cattleOrc) StopReplica(instanceID string) error {
 	return nil
 }
 
-func (orc *cattleOrc) RemoveContainer(containerID string) error {
+func (orc *cattleOrc) RemoveInstance(instanceID string) error {
 	return nil
 }
 

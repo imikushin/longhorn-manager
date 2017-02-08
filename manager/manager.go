@@ -129,7 +129,7 @@ func (man *volumeManager) Detach(name string) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := man.orc.RemoveContainer(volume.Controller.ID); err != nil {
+			if err := man.orc.RemoveInstance(volume.Controller.ID); err != nil {
 				errCh <- errors.Wrapf(err, "failed to remove controller '%s' from volume '%s'", volume.Controller.ID, volume.Name)
 			}
 		}()

@@ -41,7 +41,7 @@ func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
 	replicas := make([]*types.ReplicaInfo, len(rs))
 	for i, r := range rs {
 		replicas[i] = &types.ReplicaInfo{
-			ContainerInfo: types.ContainerInfo{
+			InstanceInfo: types.InstanceInfo{
 				Address: r.Address,
 			},
 			Mode: modes[r.Mode],
