@@ -10,25 +10,25 @@ import (
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/project"
 	"github.com/docker/libcompose/project/options"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rancher/go-rancher-metadata/metadata"
 	client "github.com/rancher/go-rancher/v2"
 	"github.com/rancher/longhorn-orc/orch"
 	"github.com/rancher/longhorn-orc/types"
+	"github.com/rancher/longhorn-orc/util"
 	rLookup "github.com/rancher/rancher-compose/lookup"
 	"github.com/rancher/rancher-compose/rancher"
 	"github.com/urfave/cli"
 	"golang.org/x/net/context"
 	"strings"
 	"text/template"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rancher/longhorn-orc/util"
 )
 
 const (
-	volmdName = "volmd"
-	controllerName = "controller"
-	replicaNamePrefix = "replica"
+	volmdName            = "volmd"
+	controllerName       = "controller"
+	replicaNamePrefix    = "replica"
 	badTimestampProperty = "badTimestamp"
 )
 
@@ -223,7 +223,7 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 
 	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
 		"stackId": stack.Id,
-		"name": volmdName,
+		"name":    volmdName,
 	}})
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting volmd")
@@ -241,7 +241,7 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 	}
 
 	svcColl, err = orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
-		"stackId": stack.Id,
+		"stackId":     stack.Id,
 		"name_prefix": replicaNamePrefix,
 	}})
 	if err != nil {
@@ -253,7 +253,7 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 		index := svc.Name[len(replicaNamePrefix):]
 		replica := &types.ReplicaInfo{
 			InstanceInfo: types.InstanceInfo{
-				ID: svc.Id,
+				ID:      svc.Id,
 				Running: svc.State == "active",
 				Address: svc.Name,
 			},
@@ -272,7 +272,7 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 
 	svcColl, err = orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
 		"stackId": stack.Id,
-		"name": controllerName,
+		"name":    controllerName,
 	}})
 	if err != nil {
 		return nil, errors.Wrap(err, "error finding controller")
@@ -283,7 +283,7 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 	for _, svc := range svcColl.Data {
 		volume.Controller = &types.ControllerInfo{
 			InstanceInfo: types.InstanceInfo{
-				ID: svc.Id,
+				ID:      svc.Id,
 				Running: svc.State == "active",
 				Address: svc.Name,
 			},
