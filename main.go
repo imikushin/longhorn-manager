@@ -18,6 +18,8 @@ import (
 var VERSION = "0.1.0"
 
 func main() {
+	logrus.SetFormatter(&logrus.TextFormatter{ForceColors: true})
+
 	app := cli.NewApp()
 	app.Version = VERSION
 	app.Usage = "Rancher Longhorn storage driver/orchestration"
