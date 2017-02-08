@@ -9,10 +9,10 @@ import (
 	"github.com/rancher/longhorn-orc/controller"
 	"github.com/rancher/longhorn-orc/driver"
 	"github.com/rancher/longhorn-orc/manager"
+	"github.com/rancher/longhorn-orc/orch"
 	"github.com/rancher/longhorn-orc/orch/cattle"
 	"github.com/rancher/longhorn-orc/storagepool"
 	"github.com/rancher/longhorn-orc/util/daemon"
-	"github.com/rancher/longhorn-orc/orch"
 )
 
 var VERSION = "0.1.0"
