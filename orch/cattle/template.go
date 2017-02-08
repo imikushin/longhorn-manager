@@ -82,30 +82,24 @@ services:
     - --controller
   # end controller {{end}}
 
+  volmd:
+    image: alpine
+    command: [sh]
+    stdin_open: true
+    tty: true
+
   ## End
 `
 
 	rancherComposeText = `
 version: '2'
 services:
-  ## Replicas {{range $i, $replica := .Replicas}}
-
-  # replica-{{$i}}
-  replica-{{$i}}:
+  volmd:
     metadata:
       volume:
         name: {{$.Name}}
         size: {{$.Size}}
-  # end replica-{{$i}} {{end}}
-
-  ## Controller {{with .Controller}}
-  controller:
-    metadata:
-      volume:
-        name: {{$.Name}}
-        size: {{$.Size}}
-  # end controller {{end}}
-
-  ## End
+        numberOfReplicas: {{$.NumberOfReplicas}}
+        staleReplicaTimeout: {{$.StaleReplicaTimeout}}
 `
 )

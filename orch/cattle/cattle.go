@@ -19,13 +19,13 @@ import (
 	"github.com/rancher/rancher-compose/rancher"
 	"github.com/urfave/cli"
 	"golang.org/x/net/context"
-	"strconv"
 	"strings"
 	"text/template"
 )
 
 const (
 	LastReplicaIndexProp = "lastReplicaIndex"
+	volmd                = "volmd"
 )
 
 var (
@@ -150,18 +150,21 @@ func randStr() string {
 	u := uuid.Generate()
 	b64.Write(u[:])
 	s := buf.String()[:10]
-	return strings.Replace(s, "_", "0", -1)
+	s = strings.Replace(s, "_", "0", -1)
+	return strings.Replace(s, "-", "A", -1)
 }
 
 func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
+	if v, err := orc.GetVolume(volume.Name); err == nil && v != nil {
+		return v, nil
+	} else if err != nil {
+		return nil, err
+	}
 	volume = copyVolumeProperties(volume)
 	stack0 := &client.Stack{
 		Name:        volumeStackName(volume.Name),
 		ExternalId:  fmt.Sprintf("system://%s?name=%s", "rancher-longhorn", volume.Name),
 		Environment: orc.Env,
-		Outputs: map[string]interface{}{ // TODO add and use Metadata
-			LastReplicaIndexProp: strconv.Itoa(volume.NumberOfReplicas),
-		},
 	}
 	stack, err := orc.rancher.Stack.Create(stack0)
 	if err != nil {
@@ -179,24 +182,30 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	volume.Replicas = replicas
 
 	p := orc.composeProject(volume, stack)
-	if err := p.Create(context.Background(), options.Create{}, replicaNames...); err != nil {
-		return nil, errors.Wrap(err, "failed to create replica services")
+	if err := p.Create(context.Background(), options.Create{}, append(replicaNames, volmd)...); err != nil {
+		return nil, errors.Wrap(err, "failed to create volume stack services")
 	}
 
-	// TODO get replica addresses and stuff
-
-	return volume, nil
+	return orc.GetVolume(volume.Name)
 }
 
 func (orc *cattleOrc) DeleteVolume(volumeName string) error {
+	if v, err := orc.GetVolume(volumeName); err == nil && v == nil {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	// TODO impl
 	return nil
 }
 
 func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
+	// TODO impl
 	return nil, nil
 }
 
 func (orc *cattleOrc) MarkBadReplica(replica *types.ReplicaInfo) error {
+	// TODO impl
 	return nil
 }
 
