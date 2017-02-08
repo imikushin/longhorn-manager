@@ -1,20 +1,40 @@
 package cattle
 
 import (
+	"bytes"
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/libcompose/cli/logger"
+	"github.com/docker/libcompose/config"
+	"github.com/docker/libcompose/project"
+	"github.com/docker/libcompose/project/options"
 	"github.com/pkg/errors"
 	"github.com/rancher/go-rancher-metadata/metadata"
 	client "github.com/rancher/go-rancher/v2"
 	"github.com/rancher/longhorn-orc/orch"
 	"github.com/rancher/longhorn-orc/types"
+	rLookup "github.com/rancher/rancher-compose/lookup"
 	"github.com/rancher/rancher-compose/rancher"
 	"github.com/urfave/cli"
+	"golang.org/x/net/context"
 	"strconv"
+	"text/template"
 )
 
 const (
-	LastReplicaIndexField = "lastReplicaIndex"
+	LastReplicaIndexProp = "lastReplicaIndex"
 )
+
+var (
+	stackTemplate *template.Template
+)
+
+func init() {
+	t, err := template.New("volume-stack").Parse(stackTemplateText)
+	if err != nil {
+		logrus.Fatalf("Error parsing volume stack template: %v", err)
+	}
+	stackTemplate = t
+}
 
 type cattleOrc struct {
 	rancher  *client.RancherClient
@@ -61,31 +81,69 @@ func replicaName(i int) string {
 	return "replica-" + strconv.Itoa(i)
 }
 
+func stackBytes(volume *types.VolumeInfo) []byte {
+	buffer := new(bytes.Buffer)
+	if err := stackTemplate.Execute(buffer, volume); err != nil {
+		logrus.Fatalf("Error applying the stack golang template: %v", err)
+	}
+	return buffer.Bytes()
+}
+
+func (orc *cattleOrc) envLookup() config.EnvironmentLookup {
+	return &rLookup.MapEnvLookup{Env: map[string]interface{}{
+		"LONGHORN_IMAGE": orc.LonghornImage,
+		"ORC_IMAGE":      orc.OrcImage,
+		"ORC_CONTAINER":  orc.containerUUID,
+	}}
+}
+
+func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Stack) project.APIProject {
+	context := &rancher.Context{
+		Context: project.Context{
+			EnvironmentLookup: orc.envLookup(),
+			LoggerFactory:     logger.NewColorLoggerFactory(),
+		},
+		RancherComposeBytes: stackBytes(volume),
+		Client:              orc.rancher,
+		Stack:               stack,
+	}
+	p, err := rancher.NewProject(context)
+	if err != nil {
+		logrus.Fatalf("%+v", errors.Wrap(err, "error creating compose project"))
+	}
+	if err := p.Parse(); err != nil {
+		logrus.Fatalf("%+v", errors.Wrap(err, "error parsing compose project"))
+	}
+	p.Name = volumeStackName(volume.Name)
+	return p
+}
+
 func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
 	stack0 := &client.Stack{
 		Name:          volumeStackName(volume.Name),
 		System:        true,
 		StartOnCreate: false,
-		Outputs:       map[string]interface{}{LastReplicaIndexField: "0"},
+		Outputs:       map[string]interface{}{LastReplicaIndexProp: strconv.Itoa(volume.NumberOfReplicas)},
 	}
-	_, err := orc.rancher.Stack.Create(stack0)
+	stack, err := orc.rancher.Stack.Create(stack0)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create stack '%s'", stack0.Name)
 	}
 
 	replicas := map[int]*types.ReplicaInfo{}
+	replicaNames := make([]string, volume.NumberOfReplicas)
 	for i := 1; i <= volume.NumberOfReplicas; i++ {
 		replicas[i] = &types.ReplicaInfo{Name: replicaName(i)}
+		replicaNames[i-1] = replicaName(i)
 	}
-	//lastReplicaIndex := volume.NumberOfReplicas
+	volume.Replicas = replicas
 
-	// TODO create replicas
+	p := orc.composeProject(volume, stack)
+	p.Create(context.Background(), options.Create{}, replicaNames...)
 
-	context := &rancher.Context{}
-	project, _ := rancher.NewProject(context)
-	project.Parse()
+	// TODO get replica addresses and stuff
 
-	return nil, nil
+	return volume, nil
 }
 
 func (orc *cattleOrc) DeleteVolume(volumeName string) error {

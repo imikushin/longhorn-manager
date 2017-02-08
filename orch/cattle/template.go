@@ -1,6 +1,6 @@
 package cattle
 
-const composeTemplate = `
+const stackTemplateText = `
 ## Replicas {{range $i, $replica := .Replicas}}
 
 # replica{{$i}}
