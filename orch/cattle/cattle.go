@@ -20,7 +20,7 @@ type cattleOrc struct {
 	rancher  *client.RancherClient
 	metadata metadata.Client
 
-	hostID string
+	hostUUID, containerUUID string
 
 	LonghornImage, OrcImage string
 }
@@ -39,10 +39,15 @@ func New(c *cli.Context) types.Orchestrator {
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get self host from rancher metadata"))
 	}
+	container, err := md.GetSelfContainer()
+	if err != nil {
+		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get self container from rancher metadata"))
+	}
 	return &cattleOrc{
 		rancher:       rancherClient,
 		metadata:      md,
-		hostID:        host.UUID,
+		hostUUID:      host.UUID,
+		containerUUID: container.UUID,
 		LonghornImage: c.GlobalString(orch.LonghornImageParam),
 		OrcImage:      c.GlobalString(orch.OrcImageParam),
 	}
@@ -77,7 +82,7 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	// TODO create replicas
 
 	context := &rancher.Context{}
-	project := rancher.NewProject(context)
+	project, _ := rancher.NewProject(context)
 	project.Parse()
 
 	return nil, nil
@@ -117,5 +122,5 @@ func (orc *cattleOrc) RemoveContainer(containerID string) error {
 }
 
 func (orc *cattleOrc) GetThisHostID() string {
-	return orc.hostID
+	return orc.hostUUID
 }
