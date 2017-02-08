@@ -6,11 +6,8 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
-	"github.com/rancher/longhorn-orc/agent/controller"
 	"github.com/rancher/longhorn-orc/agent/controller/rest"
 	replica "github.com/rancher/longhorn-orc/agent/replica/rest"
-	"github.com/rancher/longhorn-orc/agent/status"
 	"github.com/urfave/cli"
 )
 
