@@ -21,11 +21,15 @@ import (
 	"golang.org/x/net/context"
 	"strings"
 	"text/template"
+	"github.com/mitchellh/mapstructure"
+	"github.com/rancher/longhorn-orc/util"
 )
 
 const (
-	LastReplicaIndexProp = "lastReplicaIndex"
-	volmd                = "volmd"
+	volmdName = "volmd"
+	controllerName = "controller"
+	replicaNamePrefix = "replica"
+	badTimestampProperty = "badTimestamp"
 )
 
 var (
@@ -99,6 +103,10 @@ func volumeStackName(name string) string {
 	return "volume-" + name
 }
 
+func volumeStackExternalID(name string) string {
+	return fmt.Sprintf("system://%s?name=%s", "rancher-longhorn", name)
+}
+
 func replicaName(index string) string {
 	return "replica-" + index
 }
@@ -155,15 +163,15 @@ func randStr() string {
 }
 
 func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
-	if v, err := orc.GetVolume(volume.Name); err == nil && v != nil {
-		return v, nil
-	} else if err != nil {
+	if v, err := orc.GetVolume(volume.Name); err != nil {
 		return nil, err
+	} else if v != nil {
+		return v, nil
 	}
 	volume = copyVolumeProperties(volume)
 	stack0 := &client.Stack{
 		Name:        volumeStackName(volume.Name),
-		ExternalId:  fmt.Sprintf("system://%s?name=%s", "rancher-longhorn", volume.Name),
+		ExternalId:  volumeStackExternalID(volume.Name),
 		Environment: orc.Env,
 	}
 	stack, err := orc.rancher.Stack.Create(stack0)
@@ -182,7 +190,7 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	volume.Replicas = replicas
 
 	p := orc.composeProject(volume, stack)
-	if err := p.Create(context.Background(), options.Create{}, append(replicaNames, volmd)...); err != nil {
+	if err := p.Create(context.Background(), options.Create{}, append(replicaNames, volmdName)...); err != nil {
 		return nil, errors.Wrap(err, "failed to create volume stack services")
 	}
 
@@ -190,18 +198,99 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 }
 
 func (orc *cattleOrc) DeleteVolume(volumeName string) error {
-	if v, err := orc.GetVolume(volumeName); err == nil && v == nil {
-		return nil
-	} else if err != nil {
+	if v, err := orc.GetVolume(volumeName); err != nil {
 		return err
+	} else if v == nil {
+		return nil
 	}
 	// TODO impl
 	return nil
 }
 
 func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
-	// TODO impl
-	return nil, nil
+	stackColl, err := orc.rancher.Stack.List(&client.ListOpts{Filters: map[string]interface{}{
+		"name":         volumeStackName(volumeName),
+		"externalId":   volumeStackExternalID(volumeName),
+		"removed_null": nil,
+	}})
+	if err != nil {
+		return nil, errors.Wrap(err, "error listing stacks")
+	}
+	if len(stackColl.Data) == 0 {
+		return nil, nil
+	}
+	stack := stackColl.Data[0]
+
+	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
+		"stackId": stack.Id,
+		"name": volmdName,
+	}})
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting volmd")
+	}
+	if len(svcColl.Data) != 1 {
+		return nil, errors.Errorf("Failed to get metadata for volume '%s'", volumeName)
+	}
+	md := svcColl.Data[0]
+	volume := new(types.VolumeInfo)
+	if err := mapstructure.Decode(md.Metadata, volume); err != nil {
+		return nil, errors.Errorf("Failed to decode metadata for volume '%s'", volumeName)
+	}
+	if volume.Name != volumeName {
+		return nil, errors.Errorf("Name check failed: decoding metadata for volume '%s'", volumeName)
+	}
+
+	svcColl, err = orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
+		"stackId": stack.Id,
+		"name_prefix": replicaNamePrefix,
+	}})
+	if err != nil {
+		return nil, errors.Wrap(err, "error listing replica services")
+	}
+
+	replicas := map[string]*types.ReplicaInfo{}
+	for _, svc := range svcColl.Data {
+		index := svc.Name[len(replicaNamePrefix):]
+		replica := &types.ReplicaInfo{
+			InstanceInfo: types.InstanceInfo{
+				ID: svc.Id,
+				Running: svc.State == "active",
+				Address: svc.Name,
+			},
+			Name: svc.Name,
+		}
+		replicas[index] = replica
+		if badTS, ok := svc.Metadata[badTimestampProperty].(string); ok {
+			ts, err := util.ParseTimeZ(badTS)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed parsing badTimestamp for replica '%s', volume '%s'", svc.Name, volumeName)
+			}
+			replica.BadTimestamp = &ts
+		}
+	}
+	volume.Replicas = replicas
+
+	svcColl, err = orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
+		"stackId": stack.Id,
+		"name": controllerName,
+	}})
+	if err != nil {
+		return nil, errors.Wrap(err, "error finding controller")
+	}
+	if len(svcColl.Data) > 1 {
+		return nil, errors.Errorf("More than 1 controller for volume '%s'", volumeName)
+	}
+	for _, svc := range svcColl.Data {
+		volume.Controller = &types.ControllerInfo{
+			InstanceInfo: types.InstanceInfo{
+				ID: svc.Id,
+				Running: svc.State == "active",
+				Address: svc.Name,
+			},
+		}
+	}
+
+	return volume, nil
 }
 
 func (orc *cattleOrc) MarkBadReplica(replica *types.ReplicaInfo) error {
