@@ -6,8 +6,8 @@ version: '2'
 services:
   ## Replicas {{range $i, $replica := .Replicas}}
 
-  # replica{{$i}}
-  replica{{$i}}:
+  # replica-{{$i}}
+  replica-{{$i}}:
     image: ${LONGHORN_IMAGE}
     entrypoint:
     - longhorn
@@ -21,37 +21,37 @@ services:
     - /volume/{{$.Name}}
     - /var/lib/rancher/longhorn/backups:/var/lib/rancher/longhorn/backups   #TODO :shared
     labels:
-      io.rancher.sidekicks: replica-api{{$i}}, sync-agent{{$i}}
+      io.rancher.sidekicks: replica-api-{{$i}}, sync-agent-{{$i}}
       io.rancher.container.hostname_override: container_name
       io.rancher.scheduler.affinity:container_label_ne: io.rancher.longhorn.replica.volume={{$.Name}}
       io.rancher.scheduler.affinity:container_soft: ${ORC_CONTAINER}
       io.rancher.resource.disksize.{{$.Name}}: {{$.Size}}
       io.rancher.longhorn.replica.volume: {{$.Name}}
 
-  sync-agent{{$i}}:
+  sync-agent-{{$i}}:
     image: ${LONGHORN_IMAGE}
     entrypoint:
     - longhorn
-    network_mode: container:replica{{$i}}
+    network_mode: container:replica-{{$i}}
     working_dir: /volume/{{$.Name}}
     volumes_from:
-    - replica{{$i}}
+    - replica-{{$i}}
     command:
     - sync-agent
     - --listen
     - 0.0.0.0:9504
 
-  replica-api{{$i}}:
+  replica-api-{{$i}}:
     image: ${ORC_IMAGE}
     privileged: true
     pid: host
-    network_mode: container:replica{{$i}}
+    network_mode: container:replica-{{$i}}
     volumes_from:
-    - replica{{$i}}
+    - replica-{{$i}}
     command:
     - longhorn-agent
     - --replica
-  # end replica{{$i}} {{end}}
+  # end replica-{{$i}} {{end}}
 
   ## Controller {{with .Controller}}
   controller:
@@ -90,13 +90,13 @@ version: '2'
 services:
   ## Replicas {{range $i, $replica := .Replicas}}
 
-  # replica{{$i}}
-  replica{{$i}}:
+  # replica-{{$i}}
+  replica-{{$i}}:
     metadata:
       volume:
         name: {{$.Name}}
         size: {{$.Size}}
-  # end replica{{$i}} {{end}}
+  # end replica-{{$i}} {{end}}
 
   ## Controller {{with .Controller}}
   controller:

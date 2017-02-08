@@ -2,8 +2,10 @@ package cattle
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/uuid"
 	"github.com/docker/libcompose/cli/logger"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/project"
@@ -18,6 +20,7 @@ import (
 	"github.com/urfave/cli"
 	"golang.org/x/net/context"
 	"strconv"
+	"strings"
 	"text/template"
 )
 
@@ -96,8 +99,8 @@ func volumeStackName(name string) string {
 	return "volume-" + name
 }
 
-func replicaName(i int) string {
-	return "replica" + strconv.Itoa(i)
+func replicaName(index string) string {
+	return "replica-" + index
 }
 
 func stackBytes(t *template.Template, volume *types.VolumeInfo) []byte {
@@ -141,6 +144,15 @@ func copyVolumeProperties(volume0 *types.VolumeInfo) *types.VolumeInfo {
 	return volume
 }
 
+func randStr() string {
+	buf := new(bytes.Buffer)
+	b64 := base64.NewEncoder(base64.RawURLEncoding, buf)
+	u := uuid.Generate()
+	b64.Write(u[:])
+	s := buf.String()[:10]
+	return strings.Replace(s, "_", "0", -1)
+}
+
 func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
 	volume = copyVolumeProperties(volume)
 	stack0 := &client.Stack{
@@ -156,11 +168,13 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 		return nil, errors.Wrapf(err, "failed to create stack '%s'", stack0.Name)
 	}
 
-	replicas := map[int]*types.ReplicaInfo{}
+	replicas := map[string]*types.ReplicaInfo{}
 	replicaNames := make([]string, volume.NumberOfReplicas)
-	for i := 1; i <= volume.NumberOfReplicas; i++ {
-		replicas[i] = &types.ReplicaInfo{Name: replicaName(i)}
-		replicaNames[i-1] = replicaName(i)
+	for i := 0; i < volume.NumberOfReplicas; i++ {
+		index := randStr()
+		name := replicaName(index)
+		replicas[index] = &types.ReplicaInfo{Name: name}
+		replicaNames[i] = name
 	}
 	volume.Replicas = replicas
 

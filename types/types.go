@@ -74,7 +74,7 @@ type VolumeInfo struct {
 	NumberOfReplicas    int
 	StaleReplicaTimeout time.Duration
 	Controller          *ControllerInfo
-	Replicas            map[int]*ReplicaInfo
+	Replicas            map[string]*ReplicaInfo
 	State               *VolumeState
 }
 
