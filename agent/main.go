@@ -88,21 +88,3 @@ func runReplicaAPI(context *cli.Context) {
 	err := http.ListenAndServe(listen, router)
 	logrus.Fatalf("API returned with error: %v", err)
 }
-
-func runPing(context *cli.Context) error {
-	controller := status.NewControllerStatus()
-
-	replica, err := status.NewReplicaStatus()
-	if err != nil {
-		return err
-	}
-
-	r := mux.NewRouter()
-	r.Handle("/controller/status", controller)
-	r.Handle("/replica/status", replica)
-	http.Handle("/", r)
-
-	listen := context.GlobalString("listen")
-	logrus.Info("Listening for healthcheck requests on ", listen)
-	return http.ListenAndServe(listen, nil)
-}
