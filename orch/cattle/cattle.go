@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/context"
 	"strconv"
 	"text/template"
+	"fmt"
 )
 
 const (
@@ -25,15 +26,22 @@ const (
 )
 
 var (
-	stackTemplate *template.Template
+	dockerComposeTemplate *template.Template
+	rancherComposeTemplate *template.Template
 )
 
 func init() {
-	t, err := template.New("volume-stack").Parse(stackTemplateText)
+	t, err := template.New("docker-compose").Parse(dockerComposeText)
 	if err != nil {
 		logrus.Fatalf("Error parsing volume stack template: %v", err)
 	}
-	stackTemplate = t
+	dockerComposeTemplate = t
+
+	t, err = template.New("docker-compose").Parse(rancherComposeText)
+	if err != nil {
+		logrus.Fatalf("Error parsing volume stack template: %v", err)
+	}
+	rancherComposeTemplate = t
 }
 
 type cattleOrc struct {
@@ -43,6 +51,8 @@ type cattleOrc struct {
 	hostUUID, containerUUID string
 
 	LonghornImage, OrcImage string
+
+	Env map[string]interface{}
 }
 
 func New(c *cli.Context) types.Orchestrator {
@@ -63,14 +73,23 @@ func New(c *cli.Context) types.Orchestrator {
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get self container from rancher metadata"))
 	}
-	return &cattleOrc{
+	return initOrc(&cattleOrc{
 		rancher:       rancherClient,
 		metadata:      md,
 		hostUUID:      host.UUID,
 		containerUUID: container.UUID,
 		LonghornImage: c.GlobalString(orch.LonghornImageParam),
 		OrcImage:      c.GlobalString(orch.OrcImageParam),
+	})
+}
+
+func initOrc(orc *cattleOrc) *cattleOrc {
+	orc.Env = map[string]interface{}{
+		"LONGHORN_IMAGE": orc.LonghornImage,
+		"ORC_IMAGE":      orc.OrcImage,
+		"ORC_CONTAINER":  orc.containerUUID,
 	}
+	return orc
 }
 
 func volumeStackName(name string) string {
@@ -78,23 +97,20 @@ func volumeStackName(name string) string {
 }
 
 func replicaName(i int) string {
-	return "replica-" + strconv.Itoa(i)
+	return "replica" + strconv.Itoa(i)
 }
 
-func stackBytes(volume *types.VolumeInfo) []byte {
+func stackBytes(t *template.Template, volume *types.VolumeInfo) []byte {
 	buffer := new(bytes.Buffer)
-	if err := stackTemplate.Execute(buffer, volume); err != nil {
+	if err := t.Execute(buffer, volume); err != nil {
 		logrus.Fatalf("Error applying the stack golang template: %v", err)
 	}
+	logrus.Debugf("%s", buffer)
 	return buffer.Bytes()
 }
 
 func (orc *cattleOrc) envLookup() config.EnvironmentLookup {
-	return &rLookup.MapEnvLookup{Env: map[string]interface{}{
-		"LONGHORN_IMAGE": orc.LonghornImage,
-		"ORC_IMAGE":      orc.OrcImage,
-		"ORC_CONTAINER":  orc.containerUUID,
-	}}
+	return &rLookup.MapEnvLookup{Env: orc.Env}
 }
 
 func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Stack) project.APIProject {
@@ -102,17 +118,15 @@ func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Sta
 		Context: project.Context{
 			EnvironmentLookup: orc.envLookup(),
 			LoggerFactory:     logger.NewColorLoggerFactory(),
+			ComposeBytes:      [][]byte{stackBytes(dockerComposeTemplate, volume)},
 		},
-		RancherComposeBytes: stackBytes(volume),
+		RancherComposeBytes: stackBytes(rancherComposeTemplate, volume),
 		Client:              orc.rancher,
 		Stack:               stack,
 	}
 	p, err := rancher.NewProject(ctx)
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "error creating compose project"))
-	}
-	if err := p.Parse(); err != nil {
-		logrus.Fatalf("%+v", errors.Wrap(err, "error parsing compose project"))
 	}
 	p.Name = volumeStackName(volume.Name)
 	return p
@@ -131,9 +145,11 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	volume = copyVolumeProperties(volume)
 	stack0 := &client.Stack{
 		Name:          volumeStackName(volume.Name),
-		System:        true,
-		StartOnCreate: false,
-		//Outputs:       map[string]interface{}{LastReplicaIndexProp: strconv.Itoa(volume.NumberOfReplicas)},
+		ExternalId:    fmt.Sprintf("system://%s?name=%s", "rancher-longhorn", volume.Name),
+		Environment:   orc.Env,
+		Outputs:       map[string]interface{}{ // TODO add and use Metadata
+			LastReplicaIndexProp: strconv.Itoa(volume.NumberOfReplicas),
+		},
 	}
 	stack, err := orc.rancher.Stack.Create(stack0)
 	if err != nil {
@@ -149,7 +165,9 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	volume.Replicas = replicas
 
 	p := orc.composeProject(volume, stack)
-	p.Create(context.Background(), options.Create{}, replicaNames...)
+	if err := p.Create(context.Background(), options.Create{}, replicaNames...); err != nil {
+		return nil, errors.Wrap(err, "failed to create replica services")
+	}
 
 	// TODO get replica addresses and stuff
 
