@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"strings"
 	"text/template"
+	"time"
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 	controllerName       = "controller"
 	replicaNamePrefix    = "replica"
 	badTimestampProperty = "badTimestamp"
+	volumeProperty       = "volume"
 )
 
 var (
@@ -233,12 +235,13 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 	}
 	md := svcColl.Data[0]
 	volume := new(types.VolumeInfo)
-	if err := mapstructure.Decode(md.Metadata, volume); err != nil {
-		return nil, errors.Errorf("Failed to decode metadata for volume '%s'", volumeName)
+	if err := mapstructure.Decode(md.Metadata[volumeProperty], volume); err != nil {
+		return nil, errors.Wrapf(err, "Failed to decode metadata for volume '%s'", volumeName)
 	}
 	if volume.Name != volumeName {
-		return nil, errors.Errorf("Name check failed: decoding metadata for volume '%s'", volumeName)
+		return nil, errors.Errorf("Name check failed: decoding volume metadata: expected '%s', got '%s'", volumeName, volume.Name)
 	}
+	volume.StaleReplicaTimeout = volume.StaleReplicaTimeout * time.Hour
 
 	svcColl, err = orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
 		"stackId":     stack.Id,

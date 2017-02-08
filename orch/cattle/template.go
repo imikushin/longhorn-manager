@@ -100,6 +100,6 @@ services:
         name: {{$.Name}}
         size: {{$.Size}}
         numberOfReplicas: {{$.NumberOfReplicas}}
-        staleReplicaTimeout: {{$.StaleReplicaTimeout}}
+        staleReplicaTimeout: {{$.StaleReplicaTimeout.Hours}}
 `
 )
