@@ -98,7 +98,7 @@ func (orc *cattleOrc) envLookup() config.EnvironmentLookup {
 }
 
 func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Stack) project.APIProject {
-	context := &rancher.Context{
+	ctx := &rancher.Context{
 		Context: project.Context{
 			EnvironmentLookup: orc.envLookup(),
 			LoggerFactory:     logger.NewColorLoggerFactory(),
@@ -107,7 +107,7 @@ func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Sta
 		Client:              orc.rancher,
 		Stack:               stack,
 	}
-	p, err := rancher.NewProject(context)
+	p, err := rancher.NewProject(ctx)
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "error creating compose project"))
 	}
@@ -118,12 +118,22 @@ func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Sta
 	return p
 }
 
+func copyVolumeProperties(volume0 *types.VolumeInfo) *types.VolumeInfo {
+	volume := new(types.VolumeInfo)
+	*volume = *volume0
+	volume.Controller = nil
+	volume.Replicas = nil
+	volume.State = nil
+	return volume
+}
+
 func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo, error) {
+	volume = copyVolumeProperties(volume)
 	stack0 := &client.Stack{
 		Name:          volumeStackName(volume.Name),
 		System:        true,
 		StartOnCreate: false,
-		Outputs:       map[string]interface{}{LastReplicaIndexProp: strconv.Itoa(volume.NumberOfReplicas)},
+		//Outputs:       map[string]interface{}{LastReplicaIndexProp: strconv.Itoa(volume.NumberOfReplicas)},
 	}
 	stack, err := orc.rancher.Stack.Create(stack0)
 	if err != nil {
