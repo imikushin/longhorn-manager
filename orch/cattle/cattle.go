@@ -331,8 +331,16 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 }
 
 func (orc *cattleOrc) MarkBadReplica(replica *types.ReplicaInfo) error {
-	// TODO impl
-	return nil
+	svc, err := orc.rancher.Service.ById(replica.ID)
+	if err != nil {
+		return errors.Wrapf(err, "error getting service for replica '%s'", replica.Name)
+	}
+	svc.Metadata[badTimestampProperty] = util.FormatTimeZ(time.Now().UTC())
+	_, err = orc.rancher.Service.Update(svc, map[string]interface{}{
+		"metadata": svc.Metadata,
+	})
+
+	return errors.Wrapf(err, "error updating metadata")
 }
 
 func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*types.ReplicaInfo) (*types.ControllerInfo, error) {
@@ -466,7 +474,12 @@ func (orc *cattleOrc) StopReplica(instanceID string) error {
 }
 
 func (orc *cattleOrc) RemoveInstance(instanceID string) error {
-	return nil
+	svc, err := orc.rancher.Service.ById(instanceID)
+	if err != nil {
+		return errors.Wrapf(err, "error getting service '%s'", instanceID)
+	}
+	err = orc.rancher.Service.Delete(svc)
+	return errors.Wrapf(err, "error deleting service '%s'", svc.Name)
 }
 
 func (orc *cattleOrc) GetThisHostID() string {
