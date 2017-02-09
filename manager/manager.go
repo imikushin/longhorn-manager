@@ -157,12 +157,12 @@ func (man *volumeManager) Detach(name string) error {
 	}
 	for _, replica := range volume.Replicas {
 		wg.Add(1)
-		go func() {
+		go func(replica *types.ReplicaInfo) {
 			defer wg.Done()
 			if err := man.orc.StopReplica(replica.ID); err != nil {
 				errCh <- errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.ID, volume.Name)
 			}
-		}()
+		}(replica)
 	}
 	go func() {
 		wg.Wait()
