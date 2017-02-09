@@ -389,12 +389,80 @@ func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, erro
 	return volume.Replicas[index], nil
 }
 
+func (orc *cattleOrc) startSvc(attempts int, svc0 *client.Service, errCh chan<- error) {
+	switch svc0.State {
+	case "active":
+		errCh <- nil
+		return
+	case "inactive":
+		svc, err := orc.rancher.Service.ActionActivate(svc0)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "error starting service '%s'", svc0.Id)
+			return
+		}
+		go orc.startSvc(attempts + 10, svc, errCh)
+	default:
+		if attempts <= 0 {
+			errCh <- errors.Errorf("giving up starting service '%s'", svc0.Name)
+			return
+		}
+		<-time.NewTimer(time.Second).C
+		svc, err := orc.rancher.Service.ById(svc0.Id)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "error getting service '%s'", svc0.Name)
+			return
+		}
+		go orc.startSvc(attempts - 1, svc, errCh)
+	}
+}
+
 func (orc *cattleOrc) StartReplica(instanceID string) error {
-	return nil
+	svc, err := orc.rancher.Service.ById(instanceID)
+	if err != nil {
+		return errors.Wrapf(err, "error getting service '%s'", instanceID)
+	}
+	errCh := make(chan error)
+	defer close(errCh)
+	go orc.startSvc(10, svc, errCh)
+	return <-errCh
+}
+
+func (orc *cattleOrc) stopSvc(attempts int, svc0 *client.Service, errCh chan<- error) {
+	switch svc0.State {
+	case "inactive":
+		errCh <- nil
+		return
+	case "active":
+		svc, err := orc.rancher.Service.ActionDeactivate(svc0)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "error stopping service '%s'", svc0.Id)
+			return
+		}
+		go orc.stopSvc(attempts + 10, svc, errCh)
+	default:
+		if attempts <= 0 {
+			errCh <- errors.Errorf("giving up stopping service '%s'", svc0.Name)
+			return
+		}
+		<-time.NewTimer(time.Second).C
+		svc, err := orc.rancher.Service.ById(svc0.Id)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "error getting service '%s'", svc0.Name)
+			return
+		}
+		go orc.stopSvc(attempts - 1, svc, errCh)
+	}
 }
 
 func (orc *cattleOrc) StopReplica(instanceID string) error {
-	return nil
+	svc, err := orc.rancher.Service.ById(instanceID)
+	if err != nil {
+		return errors.Wrapf(err, "error getting service '%s'", instanceID)
+	}
+	errCh := make(chan error)
+	defer close(errCh)
+	go orc.stopSvc(10, svc, errCh)
+	return <-errCh
 }
 
 func (orc *cattleOrc) RemoveInstance(instanceID string) error {
