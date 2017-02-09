@@ -105,12 +105,12 @@ func (man *volumeManager) Attach(name string) error {
 	errCh := make(chan error)
 	for _, replica := range replicas {
 		wg.Add(1)
-		go func() {
+		go func(replica *types.ReplicaInfo) {
 			defer wg.Done()
 			if err := man.orc.StartReplica(replica.ID); err != nil {
 				errCh <- errors.Wrapf(err, "failed to start replica '%s' for volume '%s'", replica.Name, volume.Name)
 			}
-		}()
+		}(replica)
 	}
 	go func() {
 		wg.Wait()
