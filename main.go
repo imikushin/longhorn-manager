@@ -13,7 +13,10 @@ import (
 	"github.com/rancher/longhorn-orc/orch/cattle"
 	"github.com/rancher/longhorn-orc/storagepool"
 	"github.com/rancher/longhorn-orc/util/daemon"
+	"github.com/rancher/longhorn-orc/util/server"
 )
+
+const sockFile = "/var/run/rancher/longhorn/volume-manager.sock"
 
 var VERSION = "0.1.0"
 
@@ -76,7 +79,7 @@ func main() {
 func RunManager(c *cli.Context) error {
 	man := manager.New(cattle.New(c), manager.WaitForDevice, manager.Monitor(controller.New))
 
-	go manager.ServeAPI(man)
+	go server.NewUnixServer(sockFile).Serve(manager.Handler(man))
 
 	return daemon.WaitForExit()
 }

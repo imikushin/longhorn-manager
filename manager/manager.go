@@ -47,6 +47,9 @@ func (man *volumeManager) Get(name string) (*types.VolumeInfo, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get volume '%s'", name)
 	}
+
+	// TODO figure out and set volume state
+
 	return vol, nil
 }
 
