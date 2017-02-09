@@ -400,7 +400,7 @@ func (orc *cattleOrc) startSvc(attempts int, svc0 *client.Service, errCh chan<- 
 			errCh <- errors.Wrapf(err, "error starting service '%s'", svc0.Id)
 			return
 		}
-		go orc.startSvc(attempts + 10, svc, errCh)
+		go orc.startSvc(attempts+10, svc, errCh)
 	default:
 		if attempts <= 0 {
 			errCh <- errors.Errorf("giving up starting service '%s'", svc0.Name)
@@ -412,7 +412,7 @@ func (orc *cattleOrc) startSvc(attempts int, svc0 *client.Service, errCh chan<- 
 			errCh <- errors.Wrapf(err, "error getting service '%s'", svc0.Name)
 			return
 		}
-		go orc.startSvc(attempts - 1, svc, errCh)
+		go orc.startSvc(attempts-1, svc, errCh)
 	}
 }
 
@@ -438,7 +438,7 @@ func (orc *cattleOrc) stopSvc(attempts int, svc0 *client.Service, errCh chan<- e
 			errCh <- errors.Wrapf(err, "error stopping service '%s'", svc0.Id)
 			return
 		}
-		go orc.stopSvc(attempts + 10, svc, errCh)
+		go orc.stopSvc(attempts+10, svc, errCh)
 	default:
 		if attempts <= 0 {
 			errCh <- errors.Errorf("giving up stopping service '%s'", svc0.Name)
@@ -450,7 +450,7 @@ func (orc *cattleOrc) stopSvc(attempts int, svc0 *client.Service, errCh chan<- e
 			errCh <- errors.Wrapf(err, "error getting service '%s'", svc0.Name)
 			return
 		}
-		go orc.stopSvc(attempts - 1, svc, errCh)
+		go orc.stopSvc(attempts-1, svc, errCh)
 	}
 }
 
