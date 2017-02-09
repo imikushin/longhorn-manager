@@ -17,7 +17,7 @@ import (
 	"github.com/rancher/longhorn-orc/orch"
 	"github.com/rancher/longhorn-orc/types"
 	"github.com/rancher/longhorn-orc/util"
-	rLookup "github.com/rancher/rancher-compose/lookup"
+	"github.com/rancher/rancher-compose/lookup"
 	"github.com/rancher/rancher-compose/rancher"
 	"github.com/urfave/cli"
 	"golang.org/x/net/context"
@@ -123,7 +123,7 @@ func stackBytes(t *template.Template, volume *types.VolumeInfo) []byte {
 }
 
 func (orc *cattleOrc) envLookup() config.EnvironmentLookup {
-	return &rLookup.MapEnvLookup{Env: orc.Env}
+	return &lookup.MapEnvLookup{Env: orc.Env}
 }
 
 func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Stack) project.APIProject {
@@ -200,13 +200,15 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 }
 
 func (orc *cattleOrc) DeleteVolume(volumeName string) error {
-	if v, err := orc.GetVolume(volumeName); err != nil {
+	stack, err := orc.getStack(volumeName)
+	if err != nil {
 		return err
-	} else if v == nil {
+	}
+	if stack == nil {
 		return nil
 	}
-	// TODO impl
-	return nil
+	_, err = orc.rancher.Stack.ActionRemove(stack)
+	return errors.Wrapf(err, "error removing stack for volume '%s'", volumeName)
 }
 
 func (orc *cattleOrc) getStack(volumeName string) (*client.Stack, error) {
