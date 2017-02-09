@@ -192,7 +192,7 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	volume.Replicas = replicas
 
 	p := orc.composeProject(volume, stack)
-	if err := p.Create(context.Background(), options.Create{}, append(replicaNames, volmdName)...); err != nil {
+	if err := p.Up(context.Background(), options.Up{}, append(replicaNames, volmdName)...); err != nil {
 		return nil, errors.Wrap(err, "failed to create volume stack services")
 	}
 
@@ -235,7 +235,7 @@ func (orc *cattleOrc) getReplicas(volumeName string, stack *client.Stack) (map[s
 
 	replicas := map[string]*types.ReplicaInfo{}
 	for _, svc := range svcColl.Data {
-		index := svc.Name[len(replicaNamePrefix):]
+		index := svc.Name[len(replicaNamePrefix)+1:]
 		replica := &types.ReplicaInfo{
 			InstanceInfo: types.InstanceInfo{
 				ID:      svc.Id,
@@ -360,7 +360,31 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 }
 
 func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, error) {
-	return nil, nil
+	stack, err := orc.getStack(volumeName)
+	if err != nil {
+		return nil, err
+	}
+	if stack == nil {
+		return nil, errors.Errorf("can not create controller for non-existent volume '%s'", volumeName)
+	}
+	volume, err := orc.getVolume(volumeName, stack)
+	if err != nil {
+		return nil, err
+	}
+	index := randStr()
+	replica := &types.ReplicaInfo{Name: replicaName(index)}
+	volume.Replicas[index] = replica
+	p := orc.composeProject(volume, stack)
+	if err := p.Up(context.Background(), options.Up{}, replica.Name); err != nil {
+		return nil, errors.Wrap(err, "failed to create replica service")
+	}
+	volume, err = orc.getVolume(volumeName, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Warnf("replicas: %+v", volume.Replicas)
+	return volume.Replicas[index], nil
 }
 
 func (orc *cattleOrc) StartReplica(instanceID string) error {
