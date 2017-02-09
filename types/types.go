@@ -57,7 +57,7 @@ type Orchestrator interface {
 	GetVolume(volumeName string) (*VolumeInfo, error)
 	MarkBadReplica(replica *ReplicaInfo) error // find replica by Address
 
-	CreateController(volumeName string, replicas []*ReplicaInfo) (*ControllerInfo, error)
+	CreateController(volumeName string, replicas map[string]*ReplicaInfo) (*ControllerInfo, error)
 	CreateReplica(volumeName string) (*ReplicaInfo, error)
 
 	StartReplica(instanceID string) error

@@ -79,31 +79,52 @@ func (man *volumeManager) Attach(name string) error {
 		}
 		return errors.Errorf("volume already attached to host '%s'", volume.Controller.HostID)
 	}
-	replicas := []*types.ReplicaInfo{}
-	var mostRecentBadReplica *types.ReplicaInfo
-	for _, replica := range volume.Replicas {
+	replicas := map[string]*types.ReplicaInfo{}
+	var recentBadReplica *types.ReplicaInfo
+	var recentBadK string
+	for k, replica := range volume.Replicas {
 		if replica.Running {
 			if err := man.orc.StopReplica(replica.ID); err != nil {
-				return errors.Wrapf(err, "failed to stop replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, volume.Name)
+				return errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.Name, volume.Name)
 			}
 		}
 		if replica.BadTimestamp == nil {
-			replicas = append(replicas, replica)
-		} else if mostRecentBadReplica == nil || replica.BadTimestamp.After(*mostRecentBadReplica.BadTimestamp) {
-			mostRecentBadReplica = replica
+			replicas[k] = replica
+		} else if recentBadReplica == nil || replica.BadTimestamp.After(*recentBadReplica.BadTimestamp) {
+			recentBadReplica = replica
+			recentBadK = k
 		}
 	}
-	if len(replicas) == 0 && mostRecentBadReplica != nil {
-		replicas = append(replicas, mostRecentBadReplica)
+	if len(replicas) == 0 && recentBadReplica != nil {
+		replicas[recentBadK] = recentBadReplica
 	}
 	if len(replicas) == 0 {
 		return errors.Errorf("no replicas to start the controller for volume '%s'", volume.Name)
 	}
+	wg := &sync.WaitGroup{}
+	errCh := make(chan error)
 	for _, replica := range replicas {
-		if err := man.orc.StartReplica(replica.ID); err != nil {
-			return errors.Wrapf(err, "failed to start replica '%s' on host '%s' for volume '%s'", replica.ID, replica.HostID, volume.Name)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := man.orc.StartReplica(replica.ID); err != nil {
+				errCh <- errors.Wrapf(err, "failed to start replica '%s' for volume '%s'", replica.Name, volume.Name)
+			}
+		}()
 	}
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+	errs := Errs{}
+	for err := range errCh {
+		errs = append(errs, err)
+		logrus.Errorf("%+v", err)
+	}
+	if len(errs) > 0 {
+		return errs
+	}
+
 	controllerInfo, err := man.orc.CreateController(volume.Name, replicas)
 	if err != nil {
 		return errors.Wrapf(err, "failed to start the controller for volume '%s'", volume.Name)

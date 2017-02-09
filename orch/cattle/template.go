@@ -13,9 +13,9 @@ services:
     - longhorn
     command:
     - replica
-    - --listen
-    - 0.0.0.0:9502
+    - --listen=0.0.0.0:9502
     - --sync-agent=false
+    - --size={{$.Size}}
     - /volume/{{$.Name}}
     volumes:
     - /volume/{{$.Name}}
@@ -38,8 +38,7 @@ services:
     - replica-{{$i}}
     command:
     - sync-agent
-    - --listen
-    - 0.0.0.0:9504
+    - --listen=0.0.0.0:9504
 
   replica-api-{{$i}}:
     image: ${ORC_IMAGE}
@@ -59,10 +58,11 @@ services:
     command:
     - launch
     - controller
-    - --listen
-    - 0.0.0.0:9501
-    - --frontend
-    - tgt
+    - --listen=0.0.0.0:9501
+    - --frontend=tgt
+    # {{range $.Replicas}}
+    - --replica=tcp://{{.Name}}:9502
+    # {{end}}
     - {{$.Name}}
     privileged: true
     volumes:
