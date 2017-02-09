@@ -330,11 +330,26 @@ func (orc *cattleOrc) GetVolume(volumeName string) (*types.VolumeInfo, error) {
 	return orc.getVolume(volumeName, stack)
 }
 
-func (orc *cattleOrc) MarkBadReplica(replica *types.ReplicaInfo) error {
-	svc, err := orc.rancher.Service.ById(replica.ID)
+func (orc *cattleOrc) MarkBadReplica(volumeName string, replica *types.ReplicaInfo) error {
+	stack, err := orc.getStack(volumeName)
 	if err != nil {
-		return errors.Wrapf(err, "error getting service for replica '%s'", replica.Name)
+		return err
 	}
+	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
+		"stackId": stack.Id,
+		"name":    replica.Address,
+	}})
+	if err != nil {
+		return errors.Wrapf(err, "error finding replica '%s' for volume '%s'", replica.Address, volumeName)
+	}
+	if len(svcColl.Data) < 1 {
+		return errors.Errorf("Could not find replica named '%s' for volume '%s'", replica.Address, volumeName)
+	}
+	if len(svcColl.Data) > 1 {
+		return errors.Errorf("More than 1 replica named '%s' for volume '%s'", replica.Address, volumeName)
+	}
+	svc := &svcColl.Data[0]
+
 	svc.Metadata[badTimestampProperty] = util.FormatTimeZ(time.Now().UTC())
 	_, err = orc.rancher.Service.Update(svc, map[string]interface{}{
 		"metadata": svc.Metadata,

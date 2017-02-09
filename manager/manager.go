@@ -225,7 +225,7 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 					errCh <- errors.Wrapf(err, "failed to remove ERR replica '%s' from volume '%s'", replica.Address, volume.Name)
 					return
 				}
-				if err := man.orc.MarkBadReplica(replica); err != nil {
+				if err := man.orc.MarkBadReplica(volume.Name, replica); err != nil {
 					errCh <- errors.Wrapf(err, "failed to mark replica '%s' bad for volume '%s'", replica.Address, volume.Name)
 				}
 			}(replica)

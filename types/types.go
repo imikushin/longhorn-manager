@@ -55,7 +55,7 @@ type Orchestrator interface {
 	CreateVolume(volume *VolumeInfo) (*VolumeInfo, error) // creates (but does not start) replicas as well
 	DeleteVolume(volumeName string) error                 // removes all the volume components
 	GetVolume(volumeName string) (*VolumeInfo, error)
-	MarkBadReplica(replica *ReplicaInfo) error // find replica by Address
+	MarkBadReplica(volumeName string, replica *ReplicaInfo) error // find replica by Address
 
 	CreateController(volumeName string, replicas map[string]*ReplicaInfo) (*ControllerInfo, error)
 	CreateReplica(volumeName string) (*ReplicaInfo, error)
