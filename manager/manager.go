@@ -102,11 +102,17 @@ func (man *volumeManager) Attach(name string) error {
 	replicas := map[string]*types.ReplicaInfo{}
 	var recentBadReplica *types.ReplicaInfo
 	var recentBadK string
+	wg := &sync.WaitGroup{}
+	errCh := make(chan error)
 	for k, replica := range volume.Replicas {
 		if replica.Running {
-			if err := man.orc.StopReplica(replica.ID); err != nil {
-				return errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.Name, volume.Name)
-			}
+			wg.Add(1)
+			go func(replica *types.ReplicaInfo) {
+				defer wg.Done()
+				if err := man.orc.StopReplica(replica.ID); err != nil {
+					errCh <- errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.Name, volume.Name)
+				}
+			}(replica)
 		}
 		if replica.BadTimestamp == nil {
 			replicas[k] = replica
@@ -115,14 +121,26 @@ func (man *volumeManager) Attach(name string) error {
 			recentBadK = k
 		}
 	}
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+	errs := Errs{}
+	for err := range errCh {
+		errs = append(errs, err)
+		logrus.Errorf("%+v", err)
+	}
+	if len(errs) > 0 {
+		return errs
+	}
 	if len(replicas) == 0 && recentBadReplica != nil {
 		replicas[recentBadK] = recentBadReplica
 	}
 	if len(replicas) == 0 {
 		return errors.Errorf("no replicas to start the controller for volume '%s'", volume.Name)
 	}
-	wg := &sync.WaitGroup{}
-	errCh := make(chan error)
+	wg = &sync.WaitGroup{}
+	errCh = make(chan error)
 	for _, replica := range replicas {
 		wg.Add(1)
 		go func(replica *types.ReplicaInfo) {
@@ -136,7 +154,7 @@ func (man *volumeManager) Attach(name string) error {
 		wg.Wait()
 		close(errCh)
 	}()
-	errs := Errs{}
+	errs = Errs{}
 	for err := range errCh {
 		errs = append(errs, err)
 		logrus.Errorf("%+v", err)
