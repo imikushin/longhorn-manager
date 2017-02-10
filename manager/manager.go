@@ -42,13 +42,32 @@ func (man *volumeManager) Delete(name string) error {
 	return errors.Wrapf(man.orc.DeleteVolume(name), "failed to delete volume '%s'", name)
 }
 
+func volumeState(volume *types.VolumeInfo) types.VolumeState {
+	goodReplicaCount := 0
+	for _, replica := range volume.Replicas {
+		if replica.BadTimestamp == nil {
+			goodReplicaCount++
+		}
+	}
+	switch {
+	case goodReplicaCount == 0:
+		return types.Faulted
+	case volume.Controller == nil:
+		return types.Detached
+	case goodReplicaCount == volume.NumberOfReplicas:
+		return types.Healthy
+	}
+	return types.Degraded
+}
+
 func (man *volumeManager) Get(name string) (*types.VolumeInfo, error) {
 	vol, err := man.orc.GetVolume(name)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get volume '%s'", name)
 	}
 
-	// TODO figure out and set volume state
+	state := volumeState(vol)
+	vol.State = &state
 
 	return vol, nil
 }
