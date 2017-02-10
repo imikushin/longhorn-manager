@@ -22,8 +22,8 @@ func Handler(man types.VolumeManager) http.Handler {
 	s.Methods("POST").Path("/").HandlerFunc(Volume2VolumeHandlerFunc(man.Create))
 	s.Methods("GET").Path("/{name}").HandlerFunc(Name2VolumeHandlerFunc(man.Get))
 	s.Methods("DELETE").Path("/{name}").HandlerFunc(NameHandlerFunc(man.Delete))
-	s.Methods("PUT").Path("/{name}/attach").HandlerFunc(NameHandlerFunc(man.Attach))
-	s.Methods("DELETE").Path("/{name}/attach").HandlerFunc(NameHandlerFunc(man.Detach))
+	s.Methods("POST").Path("/{name}/attach").HandlerFunc(NameHandlerFunc(man.Attach))
+	s.Methods("POST").Path("/{name}/detach").HandlerFunc(NameHandlerFunc(man.Detach))
 
 	return r
 }
