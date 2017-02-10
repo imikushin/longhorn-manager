@@ -14,8 +14,8 @@ type volumeManager struct {
 	monitors       map[string]io.Closer
 	addingReplicas map[string]int
 
-	orc           types.Orchestrator
-	monitor       types.Monitor
+	orc     types.Orchestrator
+	monitor types.Monitor
 }
 
 func New(orc types.Orchestrator, monitor types.Monitor) types.VolumeManager {
@@ -23,8 +23,8 @@ func New(orc types.Orchestrator, monitor types.Monitor) types.VolumeManager {
 		monitors:       map[string]io.Closer{},
 		addingReplicas: map[string]int{},
 
-		orc:           orc,
-		monitor:       monitor,
+		orc:     orc,
+		monitor: monitor,
 	}
 }
 
