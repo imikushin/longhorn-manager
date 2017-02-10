@@ -36,7 +36,7 @@ func NameHandlerFunc(f func(name string) error) http.HandlerFunc {
 		case nil:
 			r.JSON(w, http.StatusOK, map[string]interface{}{})
 		default:
-			r.JSON(w, http.StatusBadGateway, err)
+			r.JSON(w, http.StatusBadGateway, map[string]interface{}{"error": err})
 		}
 	}
 }
@@ -47,9 +47,9 @@ func Name2VolumeHandlerFunc(f func(name string) (*types.VolumeInfo, error)) http
 		volume, err := f(name)
 		switch err {
 		case nil:
-			r.JSON(w, http.StatusOK, volume)
+			r.JSON(w, http.StatusOK, map[string]interface{}{"data": volume})
 		default:
-			r.JSON(w, http.StatusBadGateway, err)
+			r.JSON(w, http.StatusBadGateway, map[string]interface{}{"error": err})
 		}
 	}
 }
@@ -64,9 +64,9 @@ func Volume2VolumeHandlerFunc(f func(volume *types.VolumeInfo) (*types.VolumeInf
 		volume, err := f(volume0)
 		switch err {
 		case nil:
-			r.JSON(w, http.StatusOK, volume)
+			r.JSON(w, http.StatusOK, map[string]interface{}{"data": volume})
 		default:
-			r.JSON(w, http.StatusBadGateway, err)
+			r.JSON(w, http.StatusBadGateway, map[string]interface{}{"error": err})
 		}
 	}
 }
