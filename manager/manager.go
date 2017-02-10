@@ -15,17 +15,15 @@ type volumeManager struct {
 	addingReplicas map[string]int
 
 	orc           types.Orchestrator
-	waitForDevice types.WaitForDevice
 	monitor       types.Monitor
 }
 
-func New(orc types.Orchestrator, waitDev types.WaitForDevice, monitor types.Monitor) types.VolumeManager {
+func New(orc types.Orchestrator, monitor types.Monitor) types.VolumeManager {
 	return &volumeManager{
 		monitors:       map[string]io.Closer{},
 		addingReplicas: map[string]int{},
 
 		orc:           orc,
-		waitForDevice: waitDev,
 		monitor:       monitor,
 	}
 }
@@ -150,9 +148,6 @@ func (man *volumeManager) Attach(name string) error {
 	controllerInfo, err := man.orc.CreateController(volume.Name, replicas)
 	if err != nil {
 		return errors.Wrapf(err, "failed to start the controller for volume '%s'", volume.Name)
-	}
-	if err := man.waitForDevice(volume.Name); err != nil {
-		return errors.Wrapf(err, "error waiting for device for volume '%s'", volume.Name)
 	}
 
 	volume.Controller = controllerInfo

@@ -77,7 +77,7 @@ func main() {
 }
 
 func RunManager(c *cli.Context) error {
-	man := manager.New(cattle.New(c), manager.WaitForDevice, manager.Monitor(controller.New))
+	man := manager.New(cattle.New(c), manager.Monitor(controller.New))
 
 	go server.NewUnixServer(sockFile).Serve(manager.Handler(man))
 
