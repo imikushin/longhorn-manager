@@ -2,6 +2,7 @@ package manager
 
 import (
 	"encoding/json"
+	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/rancher/longhorn-orc/types"
@@ -34,8 +35,10 @@ func NameHandlerFunc(f func(name string) error) http.HandlerFunc {
 		err := f(name)
 		switch err {
 		case nil:
+			logrus.Debugf("success: running '%+v', for name '%s'", f, name)
 			r.JSON(w, http.StatusOK, map[string]interface{}{})
 		default:
+			logrus.Errorf("%+v", errors.Wrapf(err, "error running '%+v', for name '%s'", f, name))
 			r.JSON(w, http.StatusBadGateway, map[string]interface{}{"error": err})
 		}
 	}
@@ -47,8 +50,10 @@ func Name2VolumeHandlerFunc(f func(name string) (*types.VolumeInfo, error)) http
 		volume, err := f(name)
 		switch err {
 		case nil:
+			logrus.Debugf("success: got volume '%+v' running '%+v', for name '%s'", volume, f, name)
 			r.JSON(w, http.StatusOK, map[string]interface{}{"data": volume})
 		default:
+			logrus.Errorf("%+v", errors.Wrapf(err, "error running '%+v', for name '%s'", f, name))
 			r.JSON(w, http.StatusBadGateway, map[string]interface{}{"error": err})
 		}
 	}
@@ -58,14 +63,17 @@ func Volume2VolumeHandlerFunc(f func(volume *types.VolumeInfo) (*types.VolumeInf
 	return func(w http.ResponseWriter, req *http.Request) {
 		volume0 := new(types.VolumeInfo)
 		if err := json.NewDecoder(req.Body).Decode(volume0); err != nil {
+			logrus.Errorf("%+v", errors.Wrap(err, "could not parse body"))
 			r.JSON(w, http.StatusBadRequest, errors.Wrap(err, "could not parse"))
 			return
 		}
 		volume, err := f(volume0)
 		switch err {
 		case nil:
+			logrus.Debugf("success: got volume '%+v' running '%+v', for volume '%+v'", volume, f, volume0)
 			r.JSON(w, http.StatusOK, map[string]interface{}{"data": volume})
 		default:
+			logrus.Errorf("%+v", errors.Wrapf(err, "error running '%+v', for volume '%+v'", f, volume0))
 			r.JSON(w, http.StatusBadGateway, map[string]interface{}{"error": err})
 		}
 	}

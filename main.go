@@ -30,8 +30,9 @@ func main() {
 
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
-			Name:  "debug, d",
-			Usage: "enable debug logging level",
+			Name:   "debug, d",
+			Usage:  "enable debug logging level",
+			EnvVar: "RANCHER_DEBUG",
 		},
 		cli.StringFlag{
 			Name:   "cattle-url",
@@ -71,12 +72,16 @@ func main() {
 	app.Commands = []cli.Command{storagepool.Command, driver.Command}
 
 	if err := app.Run(os.Args); err != nil {
-		logrus.Fatalf("Error running longhorn driver: %v", err)
+		logrus.Fatalf("Critical error: %v", err)
 	}
 
 }
 
 func RunManager(c *cli.Context) error {
+	if c.Bool("debug") {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
 	man := manager.New(cattle.New(c), manager.Monitor(controller.New))
 
 	go server.NewUnixServer(sockFile).Serve(manager.Handler(man))

@@ -65,23 +65,30 @@ type cattleOrc struct {
 }
 
 func New(c *cli.Context) types.Orchestrator {
-	rancherClient, err := client.NewRancherClient(&client.ClientOpts{
+	clientOpts := &client.ClientOpts{
 		Url:       c.GlobalString("cattle-url"),
 		AccessKey: c.GlobalString("cattle-access-key"),
 		SecretKey: c.GlobalString("cattle-secret-key"),
-	})
+	}
+	rancherClient, err := client.NewRancherClient(clientOpts)
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get rancher client"))
 	}
+	logrus.Debugf("rancher clientOpts: %+v", *clientOpts)
+
 	md := metadata.NewClient(c.GlobalString("metadata-url"))
 	host, err := md.GetSelfHost()
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get self host from rancher metadata"))
 	}
+	logrus.Infof("cattle orc: this host UUID: '%s'", host.UUID)
+
 	container, err := md.GetSelfContainer()
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "failed to get self container from rancher metadata"))
 	}
+	logrus.Infof("cattle orc: this container UUID: '%s'", container.UUID)
+
 	return initOrc(&cattleOrc{
 		rancher:       rancherClient,
 		metadata:      md,
@@ -98,6 +105,7 @@ func initOrc(orc *cattleOrc) *cattleOrc {
 		"ORC_IMAGE":      orc.OrcImage,
 		"ORC_CONTAINER":  orc.containerUUID,
 	}
+	logrus.Infof("volume stack env: %+v", orc.Env)
 	return orc
 }
 
