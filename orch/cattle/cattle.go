@@ -226,6 +226,10 @@ func (orc *cattleOrc) getStack(volumeName string) (*client.Stack, error) {
 	return &stackColl.Data[0], nil
 }
 
+func controllerAddress(volumeName string) string {
+	return fmt.Sprintf("%s.%s.rancher.internal", controllerName, volumeStackName(volumeName))
+}
+
 func (orc *cattleOrc) getReplicas(volumeName string, stack *client.Stack) (map[string]*types.ReplicaInfo, error) {
 	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
 		"stackId":     stack.Id,
@@ -275,7 +279,7 @@ func (orc *cattleOrc) getController(volumeName string, stack *client.Stack) (*ty
 			InstanceInfo: types.InstanceInfo{
 				ID:      svc.Id,
 				Running: svc.State == "active",
-				Address: svc.Name,
+				Address: controllerAddress(volumeName),
 			},
 		}, nil
 	}
