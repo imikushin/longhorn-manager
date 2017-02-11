@@ -460,7 +460,7 @@ func (orc *cattleOrc) StartReplica(instanceID string) error {
 	}
 	errCh := make(chan error)
 	defer close(errCh)
-	go orc.startSvc(10, svc, errCh)
+	go orc.startSvc(50, svc, errCh)
 	return <-errCh
 }
 
@@ -498,7 +498,7 @@ func (orc *cattleOrc) StopReplica(instanceID string) error {
 	}
 	errCh := make(chan error)
 	defer close(errCh)
-	go orc.stopSvc(10, svc, errCh)
+	go orc.stopSvc(50, svc, errCh)
 	return <-errCh
 }
 
