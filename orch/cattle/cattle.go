@@ -37,6 +37,8 @@ const (
 var (
 	dockerComposeTemplate  *template.Template
 	rancherComposeTemplate *template.Template
+
+	optsUp = options.Up{Create: options.Create{NoRecreate: true}}
 )
 
 func init() {
@@ -200,7 +202,7 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	volume.Replicas = replicas
 
 	p := orc.composeProject(volume, stack)
-	if err := p.Up(context.Background(), options.Up{}, append(replicaNames, volmdName)...); err != nil {
+	if err := p.Up(context.Background(), optsUp, append(replicaNames, volmdName)...); err != nil {
 		return nil, errors.Wrap(err, "failed to create volume stack services")
 	}
 
@@ -385,7 +387,7 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	volume.Replicas = replicas
 	volume.Controller = &types.ControllerInfo{}
 	p := orc.composeProject(volume, stack)
-	if err := p.Up(context.Background(), options.Up{}, controllerName); err != nil {
+	if err := p.Up(context.Background(), optsUp, controllerName); err != nil {
 		return nil, errors.Wrap(err, "failed to create controller service")
 	}
 	controller, err := orc.getController(volumeName, stack)
@@ -412,7 +414,7 @@ func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, erro
 	replica := &types.ReplicaInfo{Name: replicaName(index)}
 	volume.Replicas[index] = replica
 	p := orc.composeProject(volume, stack)
-	if err := p.Up(context.Background(), options.Up{}, replica.Name); err != nil {
+	if err := p.Up(context.Background(), optsUp, replica.Name); err != nil {
 		return nil, errors.Wrap(err, "failed to create replica service")
 	}
 	volume, err = orc.getVolume(volumeName, stack)
