@@ -202,7 +202,7 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	volume.Replicas = replicas
 
 	p := orc.composeProject(volume, stack)
-	if err := p.Up(context.Background(), optsUp, append(replicaNames, volmdName)...); err != nil {
+	if err := p.Create(context.Background(), optsUp.Create, append(replicaNames, volmdName)...); err != nil {
 		return nil, errors.Wrap(err, "failed to create volume stack services")
 	}
 
