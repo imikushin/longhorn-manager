@@ -369,7 +369,9 @@ func (orc *cattleOrc) MarkBadReplica(volumeName string, replica *types.ReplicaIn
 func (orc *cattleOrc) waitForOK(attempts int, url string, errCh chan<- error) {
 	resp, err := orc.httpClient.Get(url)
 	if err != nil {
-		errCh <- err
+		logrus.Debugf("%v", errors.Wrapf(err, "error getting '%s'", url))
+		<-time.NewTimer(time.Second).C
+		go orc.waitForOK(attempts-1, url, errCh)
 		return
 	}
 	resp.Body.Close()
