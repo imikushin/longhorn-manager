@@ -35,7 +35,7 @@ type MetadataConfig struct {
 }
 
 func VolumeStackName(name string) string {
-	return "volume-" + name
+	return VolumeToStackName(name)
 }
 
 func ControllerAddress(volumeName string) string {

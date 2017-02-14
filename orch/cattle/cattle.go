@@ -381,6 +381,14 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	if err := p.Up(context.Background(), optsUp, util.ControllerName); err != nil {
 		return nil, errors.Wrap(err, "failed to create controller service")
 	}
+	errCh := make(chan error)
+	defer close(errCh)
+	//hostname := "controller." + util.VolumeStackName(volumeName)
+	// TODO impl waitForOK
+	//go orc.waitForOK(30, "http://" + hostname + ":9501/v1", errCh)
+	//if err := <- errCh; err != nil {
+	//	return err
+	//}
 	controller, err := orc.getController(volumeName, stack)
 	if err != nil {
 		return nil, err
@@ -452,7 +460,14 @@ func (orc *cattleOrc) StartReplica(instanceID string) error {
 	errCh := make(chan error)
 	defer close(errCh)
 	go orc.startSvc(50, svc, errCh)
-	return <-errCh
+	if err := <-errCh; err != nil {
+		return err
+	}
+	return nil
+	//hostname := svc.Name + "." + util.VolumeStackName(svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string))
+	// TODO impl waitForOK
+	//go orc.waitForOK(30, "http://" + hostname + ":9502/v1", errCh)
+	//return <- errCh
 }
 
 func (orc *cattleOrc) stopSvc(attempts int, svc0 *client.Service, errCh chan<- error) {
