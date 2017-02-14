@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/rancher-compose/rancher"
 	"github.com/urfave/cli"
 	"golang.org/x/net/context"
+	"net/http"
 	"strings"
 	"text/template"
 	"time"
@@ -55,8 +56,9 @@ func init() {
 }
 
 type cattleOrc struct {
-	rancher  *client.RancherClient
-	metadata metadata.Client
+	rancher    *client.RancherClient
+	metadata   metadata.Client
+	httpClient *http.Client
 
 	hostUUID, containerUUID string
 
@@ -93,6 +95,7 @@ func New(c *cli.Context) types.Orchestrator {
 	return initOrc(&cattleOrc{
 		rancher:       rancherClient,
 		metadata:      md,
+		httpClient:    &http.Client{Timeout: 10 * time.Second},
 		hostUUID:      host.UUID,
 		containerUUID: container.UUID,
 		LonghornImage: c.GlobalString(orch.LonghornImageParam),
@@ -363,6 +366,27 @@ func (orc *cattleOrc) MarkBadReplica(volumeName string, replica *types.ReplicaIn
 	return errors.Wrapf(err, "error updating metadata")
 }
 
+func (orc *cattleOrc) waitForOK(attempts int, url string, errCh chan<- error) {
+	resp, err := orc.httpClient.Get(url)
+	if err != nil {
+		errCh <- err
+		return
+	}
+	resp.Body.Close()
+
+	if 200 <= resp.StatusCode && resp.StatusCode < 300 {
+		errCh <- nil
+		return
+	}
+	if attempts <= 0 {
+		errCh <- errors.Errorf("giving up getting '%s'", url)
+		return
+	}
+
+	<-time.NewTimer(time.Second).C
+	go orc.waitForOK(attempts-1, url, errCh)
+}
+
 func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*types.ReplicaInfo) (*types.ControllerInfo, error) {
 	stack, err := orc.getStack(volumeName)
 	if err != nil {
@@ -383,12 +407,10 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	}
 	errCh := make(chan error)
 	defer close(errCh)
-	//hostname := "controller." + util.VolumeStackName(volumeName)
-	// TODO impl waitForOK
-	//go orc.waitForOK(30, "http://" + hostname + ":9501/v1", errCh)
-	//if err := <- errCh; err != nil {
-	//	return err
-	//}
+	go orc.waitForOK(30, "http://controller."+util.VolumeStackName(volumeName)+":9501/v1/replicas", errCh)
+	if err := <-errCh; err != nil {
+		return err
+	}
 	controller, err := orc.getController(volumeName, stack)
 	if err != nil {
 		return nil, err
@@ -464,10 +486,9 @@ func (orc *cattleOrc) StartReplica(instanceID string) error {
 		return err
 	}
 	return nil
-	//hostname := svc.Name + "." + util.VolumeStackName(svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string))
-	// TODO impl waitForOK
-	//go orc.waitForOK(30, "http://" + hostname + ":9502/v1", errCh)
-	//return <- errCh
+	hostname := svc.Name + "." + util.VolumeStackName(svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string))
+	go orc.waitForOK(30, "http://"+hostname+":9502/v1", errCh)
+	return <-errCh
 }
 
 func (orc *cattleOrc) stopSvc(attempts int, svc0 *client.Service, errCh chan<- error) {
