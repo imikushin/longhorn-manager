@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	MonitoringPeriod     = time.Second * 1
+	MonitoringPeriod     = time.Second * 2
 	MonitoringMaxRetries = 3
 )
 
@@ -34,6 +34,7 @@ func Monitor(getController types.GetController) types.Monitor {
 func monitor(ctrl types.Controller, volume *types.VolumeInfo, man types.VolumeManager, ch chan Event) {
 	ticker := NewTicker(MonitoringPeriod, ch)
 	defer ticker.Start().Stop()
+	<-ch
 	failedAttempts := 0
 	for range ch {
 		if err := func() error {
