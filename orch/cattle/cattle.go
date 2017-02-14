@@ -28,7 +28,6 @@ import (
 
 const (
 	volmdName            = "volmd"
-	controllerName       = "controller"
 	replicaNamePrefix    = "replica"
 	badTimestampProperty = "badTimestamp"
 	volumeProperty       = "volume"
@@ -111,10 +110,6 @@ func initOrc(orc *cattleOrc) *cattleOrc {
 	return orc
 }
 
-func volumeStackName(name string) string {
-	return "volume-" + name
-}
-
 func volumeStackExternalID(name string) string {
 	return fmt.Sprintf("system://%s?name=%s", "rancher-longhorn", name)
 }
@@ -151,7 +146,7 @@ func (orc *cattleOrc) composeProject(volume *types.VolumeInfo, stack *client.Sta
 	if err != nil {
 		logrus.Fatalf("%+v", errors.Wrap(err, "error creating compose project"))
 	}
-	p.Name = volumeStackName(volume.Name)
+	p.Name = util.VolumeStackName(volume.Name)
 	return p
 }
 
@@ -182,7 +177,7 @@ func (orc *cattleOrc) CreateVolume(volume *types.VolumeInfo) (*types.VolumeInfo,
 	}
 	volume = copyVolumeProperties(volume)
 	stack0 := &client.Stack{
-		Name:        volumeStackName(volume.Name),
+		Name:        util.VolumeStackName(volume.Name),
 		ExternalId:  volumeStackExternalID(volume.Name),
 		Environment: orc.Env,
 	}
@@ -223,7 +218,7 @@ func (orc *cattleOrc) DeleteVolume(volumeName string) error {
 
 func (orc *cattleOrc) getStack(volumeName string) (*client.Stack, error) {
 	stackColl, err := orc.rancher.Stack.List(&client.ListOpts{Filters: map[string]interface{}{
-		"name":         volumeStackName(volumeName),
+		"name":         util.VolumeStackName(volumeName),
 		"externalId":   volumeStackExternalID(volumeName),
 		"removed_null": nil,
 	}})
@@ -234,10 +229,6 @@ func (orc *cattleOrc) getStack(volumeName string) (*client.Stack, error) {
 		return nil, nil
 	}
 	return &stackColl.Data[0], nil
-}
-
-func controllerAddress(volumeName string) string {
-	return fmt.Sprintf("%s.%s.rancher.internal", controllerName, volumeStackName(volumeName))
 }
 
 func (orc *cattleOrc) getReplicas(volumeName string, stack *client.Stack) (map[string]*types.ReplicaInfo, error) {
@@ -256,7 +247,7 @@ func (orc *cattleOrc) getReplicas(volumeName string, stack *client.Stack) (map[s
 			InstanceInfo: types.InstanceInfo{
 				ID:      svc.Id,
 				Running: svc.State == "active",
-				Address: svc.Name,
+				Address: util.ReplicaAddress(svc.Name),
 			},
 			Name: svc.Name,
 		}
@@ -276,7 +267,7 @@ func (orc *cattleOrc) getReplicas(volumeName string, stack *client.Stack) (map[s
 func (orc *cattleOrc) getController(volumeName string, stack *client.Stack) (*types.ControllerInfo, error) {
 	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
 		"stackId": stack.Id,
-		"name":    controllerName,
+		"name":    util.ControllerName,
 	}})
 	if err != nil {
 		return nil, errors.Wrap(err, "error finding controller")
@@ -289,7 +280,7 @@ func (orc *cattleOrc) getController(volumeName string, stack *client.Stack) (*ty
 			InstanceInfo: types.InstanceInfo{
 				ID:      svc.Id,
 				Running: svc.State == "active",
-				Address: controllerAddress(volumeName),
+				Address: util.ControllerAddress(volumeName),
 			},
 		}, nil
 	}
@@ -351,7 +342,7 @@ func (orc *cattleOrc) MarkBadReplica(volumeName string, replica *types.ReplicaIn
 	}
 	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
 		"stackId": stack.Id,
-		"name":    replica.Address,
+		"name":    util.ReplicaName(replica.Address),
 	}})
 	if err != nil {
 		return errors.Wrapf(err, "error finding replica '%s' for volume '%s'", replica.Address, volumeName)
@@ -387,7 +378,7 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	volume.Replicas = replicas
 	volume.Controller = &types.ControllerInfo{}
 	p := orc.composeProject(volume, stack)
-	if err := p.Up(context.Background(), optsUp, controllerName); err != nil {
+	if err := p.Up(context.Background(), optsUp, util.ControllerName); err != nil {
 		return nil, errors.Wrap(err, "failed to create controller service")
 	}
 	controller, err := orc.getController(volumeName, stack)

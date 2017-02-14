@@ -19,6 +19,10 @@ const (
 	VolumeStackPrefix = "volume-"
 )
 
+const (
+	ControllerName = "controller"
+)
+
 var (
 	cmdTimeout = time.Minute // one minute by default
 )
@@ -28,6 +32,22 @@ type MetadataConfig struct {
 	Image               string
 	OrcImage            string
 	DriverContainerName string
+}
+
+func VolumeStackName(name string) string {
+	return "volume-" + name
+}
+
+func ControllerAddress(volumeName string) string {
+	return fmt.Sprintf("http://%s.%s.rancher.internal:9501", ControllerName, VolumeStackName(volumeName))
+}
+
+func ReplicaAddress(name string) string {
+	return fmt.Sprintf("tcp://%s:9502", name)
+}
+
+func ReplicaName(address string) string {
+	return strings.TrimSuffix(strings.TrimPrefix(address, "tcp://"), ":9502")
 }
 
 func GetMetadataConfig(metadataURL string) (MetadataConfig, error) {

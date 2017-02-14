@@ -195,7 +195,7 @@ func (man *volumeManager) Detach(name string) error {
 		go func(replica *types.ReplicaInfo) {
 			defer wg.Done()
 			if err := man.orc.StopReplica(replica.ID); err != nil {
-				errCh <- errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.ID, volume.Name)
+				errCh <- errors.Wrapf(err, "failed to stop replica '%s' for volume '%s'", replica.Name, volume.Name)
 			}
 		}(replica)
 	}
@@ -223,7 +223,7 @@ func (man *volumeManager) createAndAddReplicaToController(volumeName string, ctr
 		man.addingReplicasCount(volumeName, 1)
 		defer man.addingReplicasCount(volumeName, -1)
 		if err := ctrl.AddReplica(replica); err != nil {
-			logrus.Errorf("%+v", errors.Wrapf(err, "failed to add replica '%s' to volume '%s'", replica.ID, volumeName))
+			logrus.Errorf("%+v", errors.Wrapf(err, "failed to add replica '%s' to volume '%s'", replica.Name, volumeName))
 		}
 	}()
 	return nil
@@ -242,6 +242,7 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	if err != nil {
 		return errors.Wrapf(err, "error getting replica states for volume '%s'", volume.Name)
 	}
+	logrus.Infof("checking '%s': numReplicas %v, controller knows %v replicas", volume.Name, volume.NumberOfReplicas, len(volume.Replicas))
 	goodReplicas := []*types.ReplicaInfo{}
 	woReplicas := []*types.ReplicaInfo{}
 	errCh := make(chan error)
@@ -256,6 +257,7 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 			wg.Add(1)
 			go func(replica *types.ReplicaInfo) {
 				defer wg.Done()
+				logrus.Warnf("Marking bad replica '%s'", replica.Address)
 				if err := ctrl.RemoveReplica(replica); err != nil {
 					errCh <- errors.Wrapf(err, "failed to remove ERR replica '%s' from volume '%s'", replica.Address, volume.Name)
 					return
@@ -284,6 +286,7 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	}
 
 	addingReplicas := man.addingReplicasCount(volume.Name, 0)
+	logrus.Infof("'%s' replicas by state: RW=%v, WO=%v, adding=%v", volume.Name, len(goodReplicas), len(woReplicas), addingReplicas)
 	if len(goodReplicas) < volume.NumberOfReplicas && len(woReplicas) == 0 && addingReplicas == 0 {
 		if err := man.createAndAddReplicaToController(volume.Name, ctrl); err != nil {
 			return err
