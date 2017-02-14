@@ -409,7 +409,7 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	defer close(errCh)
 	go orc.waitForOK(30, "http://controller."+util.VolumeStackName(volumeName)+":9501/v1/replicas", errCh)
 	if err := <-errCh; err != nil {
-		return err
+		return nil, err
 	}
 	controller, err := orc.getController(volumeName, stack)
 	if err != nil {
@@ -438,12 +438,20 @@ func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, erro
 	if err := p.Up(context.Background(), optsUp, replica.Name); err != nil {
 		return nil, errors.Wrap(err, "failed to create replica service")
 	}
+
+	errCh := make(chan error)
+	defer close(errCh)
+	hostname := replica.Name + "." + stack.Name
+	go orc.waitForOK(30, "http://"+hostname+":9502/v1", errCh)
+	if err := <-errCh; err != nil {
+		return nil, err
+	}
+
 	volume, err = orc.getVolume(volumeName, stack)
 	if err != nil {
 		return nil, err
 	}
 
-	logrus.Warnf("replicas: %+v", volume.Replicas)
 	return volume.Replicas[index], nil
 }
 
@@ -485,7 +493,6 @@ func (orc *cattleOrc) StartReplica(instanceID string) error {
 	if err := <-errCh; err != nil {
 		return err
 	}
-	return nil
 	hostname := svc.Name + "." + util.VolumeStackName(svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string))
 	go orc.waitForOK(30, "http://"+hostname+":9502/v1", errCh)
 	return <-errCh
