@@ -224,6 +224,9 @@ func (man *volumeManager) createAndAddReplicaToController(volumeName string, ctr
 		defer man.addingReplicasCount(volumeName, -1)
 		if err := ctrl.AddReplica(replica); err != nil {
 			logrus.Errorf("%+v", errors.Wrapf(err, "failed to add replica '%s' to volume '%s'", replica.Name, volumeName))
+			if err := man.orc.RemoveInstance(replica.ID); err != nil {
+				logrus.Errorf("%+v", errors.Wrapf(err, "failed to remove stale replica '%s' of volume '%s'", replica.Name, volumeName))
+			}
 		}
 	}()
 	return nil

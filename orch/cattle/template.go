@@ -62,7 +62,7 @@ services:
     - --listen=0.0.0.0:9501
     - --frontend=tgt
     # {{range $.Replicas}}
-    - --replica=tcp://{{.Name}}:9502
+    - --replica=tcp://{{.Name}}.{{StackName $.Name}}:9502
     # {{end}}
     - {{$.Name}}
     links:

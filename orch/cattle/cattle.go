@@ -39,16 +39,20 @@ var (
 	rancherComposeTemplate *template.Template
 
 	optsUp = options.Up{Create: options.Create{NoRecreate: true}}
+
+	templateFuncs = template.FuncMap{
+		"StackName": util.VolumeStackName,
+	}
 )
 
 func init() {
-	t, err := template.New("docker-compose").Parse(dockerComposeText)
+	t, err := template.New("docker-compose").Funcs(templateFuncs).Parse(dockerComposeText)
 	if err != nil {
 		logrus.Fatalf("Error parsing volume stack template: %v", err)
 	}
 	dockerComposeTemplate = t
 
-	t, err = template.New("docker-compose").Parse(rancherComposeText)
+	t, err = template.New("rancher-compose").Parse(rancherComposeText)
 	if err != nil {
 		logrus.Fatalf("Error parsing volume stack template: %v", err)
 	}
@@ -250,7 +254,7 @@ func (orc *cattleOrc) getReplicas(volumeName string, stack *client.Stack) (map[s
 			InstanceInfo: types.InstanceInfo{
 				ID:      svc.Id,
 				Running: svc.State == "active",
-				Address: util.ReplicaAddress(svc.Name),
+				Address: util.ReplicaAddress(svc.Name, volumeName),
 			},
 			Name: svc.Name,
 		}
@@ -343,18 +347,19 @@ func (orc *cattleOrc) MarkBadReplica(volumeName string, replica *types.ReplicaIn
 	if err != nil {
 		return err
 	}
+	replicaName := util.ReplicaName(replica.Address, volumeName)
 	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
 		"stackId": stack.Id,
-		"name":    util.ReplicaName(replica.Address),
+		"name":    replicaName,
 	}})
 	if err != nil {
-		return errors.Wrapf(err, "error finding replica '%s' for volume '%s'", replica.Address, volumeName)
+		return errors.Wrapf(err, "error finding replica '%s' for volume '%s'", replicaName, volumeName)
 	}
 	if len(svcColl.Data) < 1 {
-		return errors.Errorf("Could not find replica named '%s' for volume '%s'", replica.Address, volumeName)
+		return errors.Errorf("Could not find replica named '%s' for volume '%s'", replicaName, volumeName)
 	}
 	if len(svcColl.Data) > 1 {
-		return errors.Errorf("More than 1 replica named '%s' for volume '%s'", replica.Address, volumeName)
+		return errors.Errorf("More than 1 replica named '%s' for volume '%s'", replicaName, volumeName)
 	}
 	svc := &svcColl.Data[0]
 
@@ -377,7 +382,7 @@ func (orc *cattleOrc) waitForOK(attempts int, url string, errCh chan<- error) {
 	resp.Body.Close()
 
 	if 200 <= resp.StatusCode && resp.StatusCode < 300 {
-		logrus.Debugf("Got OK from '%s'", url)
+		logrus.Infof("Got OK from '%s'", url)
 		errCh <- nil
 		return
 	}
@@ -408,6 +413,12 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	if err := p.Up(context.Background(), optsUp, util.ControllerName); err != nil {
 		return nil, errors.Wrap(err, "failed to create controller service")
 	}
+	errCh := make(chan error)
+	defer close(errCh)
+	go orc.waitForOK(30, "http://controller."+util.VolumeStackName(volumeName)+":9501/v1/replicas", errCh)
+	if err := <-errCh; err != nil {
+		return nil, err
+	}
 	controller, err := orc.getController(volumeName, stack)
 	if err != nil {
 		return nil, err
@@ -434,6 +445,14 @@ func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, erro
 	p := orc.composeProject(volume, stack)
 	if err := p.Up(context.Background(), optsUp, replica.Name); err != nil {
 		return nil, errors.Wrap(err, "failed to create replica service")
+	}
+
+	errCh := make(chan error)
+	defer close(errCh)
+	hostname := replica.Name + "." + stack.Name
+	go orc.waitForOK(30, "http://"+hostname+":9502/v1", errCh)
+	if err := <-errCh; err != nil {
+		return nil, err
 	}
 
 	volume, err = orc.getVolume(volumeName, stack)
@@ -479,6 +498,11 @@ func (orc *cattleOrc) StartReplica(instanceID string) error {
 	errCh := make(chan error)
 	defer close(errCh)
 	go orc.startSvc(50, svc, errCh)
+	if err := <-errCh; err != nil {
+		return err
+	}
+	hostname := svc.Name + "." + util.VolumeStackName(svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string))
+	go orc.waitForOK(30, "http://"+hostname+":9502/v1", errCh)
 	return <-errCh
 }
 
