@@ -245,7 +245,7 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	if err != nil {
 		return errors.Wrapf(err, "error getting replica states for volume '%s'", volume.Name)
 	}
-	logrus.Infof("checking '%s': numReplicas %v, controller knows %v replicas", volume.Name, volume.NumberOfReplicas, len(volume.Replicas))
+	logrus.Debugf("checking '%s', NumberOfReplicas=%v: controller knows %v replicas", volume.Name, volume.NumberOfReplicas, len(volume.Replicas))
 	goodReplicas := []*types.ReplicaInfo{}
 	woReplicas := []*types.ReplicaInfo{}
 	errCh := make(chan error)
@@ -289,7 +289,7 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	}
 
 	addingReplicas := man.addingReplicasCount(volume.Name, 0)
-	logrus.Infof("'%s' replicas by state: RW=%v, WO=%v, adding=%v", volume.Name, len(goodReplicas), len(woReplicas), addingReplicas)
+	logrus.Debugf("'%s' replicas by state: RW=%v, WO=%v, adding=%v", volume.Name, len(goodReplicas), len(woReplicas), addingReplicas)
 	if len(goodReplicas) < volume.NumberOfReplicas && len(woReplicas) == 0 && addingReplicas == 0 {
 		if err := man.createAndAddReplicaToController(volume.Name, ctrl); err != nil {
 			return err
