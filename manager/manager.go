@@ -96,8 +96,9 @@ func (man *volumeManager) Attach(name string) error {
 		if volume.Controller.HostID == man.orc.GetThisHostID() {
 			man.startMonitoring(volume)
 			return nil
+		} else if err := man.Detach(name); err != nil {
+			return errors.Wrapf(err, "failed to detach before reattaching volume '%s'", name)
 		}
-		return errors.Errorf("volume already attached to host '%s'", volume.Controller.HostID)
 	}
 	replicas := map[string]*types.ReplicaInfo{}
 	var recentBadReplica *types.ReplicaInfo
