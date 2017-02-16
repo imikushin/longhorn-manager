@@ -7,16 +7,17 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/rancher/longhorn-orc/controller"
-	"github.com/rancher/longhorn-orc/driver"
 	"github.com/rancher/longhorn-orc/manager"
 	"github.com/rancher/longhorn-orc/orch"
 	"github.com/rancher/longhorn-orc/orch/cattle"
-	"github.com/rancher/longhorn-orc/storagepool"
 	"github.com/rancher/longhorn-orc/util/daemon"
 	"github.com/rancher/longhorn-orc/util/server"
 )
 
-const sockFile = "/var/run/rancher/longhorn/volume-manager.sock"
+const (
+	sockFile = "/var/run/rancher/longhorn/volume-manager.sock"
+	RancherMetadataURL  = "http://rancher-metadata/2016-07-29"
+)
 
 var VERSION = "0.1.0"
 
@@ -65,11 +66,9 @@ func main() {
 		cli.StringFlag{
 			Name:  "metadata-url",
 			Usage: "set the metadata url",
-			Value: driver.RancherMetadataURL,
+			Value: RancherMetadataURL,
 		},
 	}
-
-	app.Commands = []cli.Command{storagepool.Command, driver.Command}
 
 	if err := app.Run(os.Args); err != nil {
 		logrus.Fatalf("Critical error: %v", err)

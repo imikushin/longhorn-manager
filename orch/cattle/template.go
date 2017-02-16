@@ -39,18 +39,6 @@ services:
     command:
     - sync-agent
     - --listen=0.0.0.0:9504
-
-  #replica-api-{{$i}}:
-  #  image: ${ORC_IMAGE}
-  #  privileged: true
-  #  pid: host
-  #  network_mode: container:replica-{{$i}}
-  #  volumes_from:
-  #  - replica-{{$i}}
-  #  command:
-  #  - longhorn-agent
-  #  - --replica
-
   # end replica-{{$i}} {{end}}
 
   ## Controller {{with .Controller}}
@@ -77,15 +65,6 @@ services:
       # io.rancher.sidekicks: controller-agent
       io.rancher.container.hostname_override: container_name
       io.rancher.scheduler.affinity:container: ${ORC_CONTAINER}
-
-  #controller-agent:
-  #  image: ${ORC_IMAGE}
-  #  network_mode: container:controller
-  #  volumes_from: [controller]
-  #  command:
-  #  - longhorn-agent
-  #  - --controller
-
   # end controller {{end}}
 
   ## Metadata
