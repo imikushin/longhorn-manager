@@ -60,9 +60,9 @@ func init() {
 }
 
 type cattleOrc struct {
-	rancher    *client.RancherClient
-	metadata   metadata.Client
-	httpClient *http.Client
+	rancher  *client.RancherClient
+	metadata metadata.Client
+	dragon   *hiddenDragon
 
 	hostUUID, containerUUID string
 
@@ -99,7 +99,7 @@ func New(c *cli.Context) types.Orchestrator {
 	return initOrc(&cattleOrc{
 		rancher:       rancherClient,
 		metadata:      md,
-		httpClient:    &http.Client{Timeout: 10 * time.Second},
+		dragon:        &hiddenDragon{httpClient: &http.Client{Timeout: 10 * time.Second}},
 		hostUUID:      host.UUID,
 		containerUUID: container.UUID,
 		LonghornImage: c.GlobalString(orch.LonghornImageParam),
@@ -369,30 +369,6 @@ func (orc *cattleOrc) MarkBadReplica(volumeName string, replica *types.ReplicaIn
 	return errors.Wrapf(err, "error updating metadata")
 }
 
-func (orc *cattleOrc) waitForOK(attempts int, url string, errCh chan<- error) {
-	resp, err := orc.httpClient.Get(url)
-	if err != nil {
-		logrus.Debugf("%v", errors.Wrapf(err, "error getting '%s'", url))
-		<-time.NewTimer(time.Second).C
-		go orc.waitForOK(attempts-1, url, errCh)
-		return
-	}
-	resp.Body.Close()
-
-	if 200 <= resp.StatusCode && resp.StatusCode < 300 {
-		logrus.Infof("Got OK from '%s'", url)
-		errCh <- nil
-		return
-	}
-	if attempts <= 0 {
-		errCh <- errors.Errorf("giving up getting '%s'", url)
-		return
-	}
-
-	<-time.NewTimer(time.Second).C
-	go orc.waitForOK(attempts-1, url, errCh)
-}
-
 func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*types.ReplicaInfo) (*types.ControllerInfo, error) {
 	stack, err := orc.getStack(volumeName)
 	if err != nil {
@@ -411,11 +387,8 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	if err := p.Up(context.Background(), optsUp, util.ControllerName); err != nil {
 		return nil, errors.Wrap(err, "failed to create controller service")
 	}
-	errCh := make(chan error)
-	defer close(errCh)
-	go orc.waitForOK(30, "http://controller."+util.VolumeStackName(volumeName)+":9501/v1/replicas", errCh)
-	if err := <-errCh; err != nil {
-		return nil, err
+	if err := orc.dragon.WaitForController(volumeName); err != nil {
+		return nil, errors.Wrap(err, "error waiting for controller")
 	}
 	controller, err := orc.getController(volumeName, stack)
 	if err != nil {
@@ -445,11 +418,7 @@ func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, erro
 		return nil, errors.Wrap(err, "failed to create replica service")
 	}
 
-	errCh := make(chan error)
-	defer close(errCh)
-	hostname := replica.Name + "." + stack.Name
-	go orc.waitForOK(30, "http://"+hostname+":9502/v1", errCh)
-	if err := <-errCh; err != nil {
+	if err := orc.dragon.WaitForReplica(volumeName, replica.Name); err != nil {
 		return nil, err
 	}
 
@@ -499,9 +468,8 @@ func (orc *cattleOrc) StartReplica(instanceID string) error {
 	if err := <-errCh; err != nil {
 		return err
 	}
-	hostname := svc.Name + "." + util.VolumeStackName(svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string))
-	go orc.waitForOK(30, "http://"+hostname+":9502/v1", errCh)
-	return <-errCh
+	volumeName := svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string)
+	return orc.dragon.WaitForReplica(volumeName, svc.Name)
 }
 
 func (orc *cattleOrc) stopSvc(attempts int, svc0 *client.Service, errCh chan<- error) {
