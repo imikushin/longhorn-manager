@@ -387,12 +387,17 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	if err := p.Up(context.Background(), optsUp, util.ControllerName); err != nil {
 		return nil, errors.Wrap(err, "failed to create controller service")
 	}
-	if err := orc.dragon.WaitForController(volumeName); err != nil {
-		return nil, errors.Wrap(err, "error waiting for controller")
-	}
 	controller, err := orc.getController(volumeName, stack)
 	if err != nil {
 		return nil, err
+	}
+	if err := orc.dragon.WaitForController(volumeName); err != nil {
+		if svc, err := orc.rancher.Service.ById(controller.ID); err != nil {
+			logrus.Errorf("%+v", errors.Wrapf(err, "error getting controller for cleanup, volume '%s'", volumeName))
+		} else if err := orc.rancher.Service.Delete(svc); err != nil {
+			logrus.Errorf("%+v", errors.Wrapf(err, "error deleting controller, volume '%s'", volumeName))
+		}
+		return nil, errors.Wrapf(err, "error waiting for controller, volume '%s'", volumeName)
 	}
 
 	return controller, nil
@@ -418,16 +423,21 @@ func (orc *cattleOrc) CreateReplica(volumeName string) (*types.ReplicaInfo, erro
 		return nil, errors.Wrap(err, "failed to create replica service")
 	}
 
-	if err := orc.dragon.WaitForReplica(volumeName, replica.Name); err != nil {
-		return nil, err
-	}
-
-	volume, err = orc.getVolume(volumeName, stack)
+	replicas, err := orc.getReplicas(volumeName, stack)
 	if err != nil {
 		return nil, err
 	}
 
-	return volume.Replicas[index], nil
+	if err := orc.dragon.WaitForReplica(volumeName, replica.Name); err != nil {
+		if svc, err := orc.rancher.Service.ById(replicas[index].ID); err != nil {
+			logrus.Errorf("%+v", errors.Wrapf(err, "error getting replica '%s' for cleanup, volume '%s'", replica.Name, volumeName))
+		} else if err := orc.rancher.Service.Delete(svc); err != nil {
+			logrus.Errorf("%+v", errors.Wrapf(err, "error deleting replica '%s', volume '%s'", replica.Name, volumeName))
+		}
+		return nil, errors.Wrapf(err, "error waiting for replica '%s', volume '%s'", replica.Name, volumeName)
+	}
+
+	return replicas[index], nil
 }
 
 func (orc *cattleOrc) startSvc(attempts int, svc0 *client.Service, errCh chan<- error) {
@@ -469,7 +479,8 @@ func (orc *cattleOrc) StartReplica(instanceID string) error {
 		return err
 	}
 	volumeName := svc.LaunchConfig.Labels["io.rancher.longhorn.replica.volume"].(string)
-	return orc.dragon.WaitForReplica(volumeName, svc.Name)
+	err = orc.dragon.WaitForReplica(volumeName, svc.Name)
+	return errors.Wrapf(err, "error waiting to start replica")
 }
 
 func (orc *cattleOrc) stopSvc(attempts int, svc0 *client.Service, errCh chan<- error) {
