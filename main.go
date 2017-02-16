@@ -54,10 +54,6 @@ func main() {
 			Name:   orch.LonghornImageParam,
 			EnvVar: "LONGHORN_IMAGE",
 		},
-		cli.StringFlag{
-			Name:   orch.OrcImageParam,
-			EnvVar: "ORC_IMAGE",
-		},
 		cli.IntFlag{
 			Name:  "healthcheck-interval",
 			Value: 5000,

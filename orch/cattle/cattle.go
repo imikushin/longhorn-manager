@@ -66,7 +66,7 @@ type cattleOrc struct {
 
 	hostUUID, containerUUID string
 
-	LonghornImage, OrcImage string
+	LonghornImage string
 
 	Env map[string]interface{}
 }
@@ -103,14 +103,12 @@ func New(c *cli.Context) types.Orchestrator {
 		hostUUID:      host.UUID,
 		containerUUID: container.UUID,
 		LonghornImage: c.GlobalString(orch.LonghornImageParam),
-		OrcImage:      c.GlobalString(orch.OrcImageParam),
 	})
 }
 
 func initOrc(orc *cattleOrc) *cattleOrc {
 	orc.Env = map[string]interface{}{
 		"LONGHORN_IMAGE": orc.LonghornImage,
-		"ORC_IMAGE":      orc.OrcImage,
 		"ORC_CONTAINER":  orc.containerUUID,
 	}
 	logrus.Infof("volume stack env: %+v", orc.Env)
