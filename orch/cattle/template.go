@@ -21,7 +21,7 @@ services:
     - /volume/{{$.Name}}
     - /var/lib/rancher/longhorn/backups:/var/lib/rancher/longhorn/backups   #TODO :shared
     labels:
-      io.rancher.sidekicks: sync-agent-{{$i}} #, replica-api-{{$i}}
+      io.rancher.sidekicks: sync-agent-{{$i}}
       io.rancher.container.hostname_override: container_name
       io.rancher.scheduler.affinity:container_label_soft_ne: io.rancher.longhorn.replica.volume={{$.Name}}
       io.rancher.scheduler.affinity:container_soft: ${ORC_CONTAINER}
@@ -62,7 +62,6 @@ services:
     - /dev:/host/dev
     - /proc:/host/proc
     labels:
-      # io.rancher.sidekicks: controller-agent
       io.rancher.container.hostname_override: container_name
       io.rancher.scheduler.affinity:container: ${ORC_CONTAINER}
   # end controller {{end}}
