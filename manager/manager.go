@@ -6,6 +6,11 @@ import (
 	"github.com/rancher/longhorn-orc/types"
 	"io"
 	"sync"
+	"time"
+)
+
+var (
+	KeepBadReplicasPeriod = time.Hour * 2
 )
 
 type volumeManager struct {
@@ -262,13 +267,17 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 			go func(replica *types.ReplicaInfo) {
 				defer wg.Done()
 				logrus.Warnf("Marking bad replica '%s'", replica.Address)
-				if err := ctrl.RemoveReplica(replica); err != nil {
+				wg.Add(2)
+				go func() {
+					defer wg.Done()
+					err := ctrl.RemoveReplica(replica)
 					errCh <- errors.Wrapf(err, "failed to remove ERR replica '%s' from volume '%s'", replica.Address, volume.Name)
-					return
-				}
-				if err := man.orc.MarkBadReplica(volume.Name, replica); err != nil {
+				}()
+				go func() {
+					defer wg.Done()
+					err := man.orc.MarkBadReplica(volume.Name, replica)
 					errCh <- errors.Wrapf(err, "failed to mark replica '%s' bad for volume '%s'", replica.Address, volume.Name)
-				}
+				}()
 			}(replica)
 		}
 	}
@@ -278,6 +287,9 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	}()
 	errs := Errs{}
 	for err := range errCh {
+		if err == nil {
+			continue
+		}
 		errs = append(errs, err)
 		logrus.Errorf("%+v", err)
 	}
@@ -303,6 +315,54 @@ func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.V
 	return nil
 }
 
-func (man *volumeManager) Cleanup(volume *types.VolumeInfo) error {
+func (man *volumeManager) Cleanup(v *types.VolumeInfo) error {
+	volume, err := man.Get(v.Name)
+	if err != nil {
+		return errors.Wrapf(err, "error getting volume '%s'", v.Name)
+	}
+	logrus.Infof("running cleanup, volume '%s'", volume.Name)
+	now := time.Now().UTC()
+	errCh := make(chan error)
+	wg := &sync.WaitGroup{}
+	for _, replica := range volume.Replicas {
+		if replica.BadTimestamp == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(replica *types.ReplicaInfo) {
+			defer wg.Done()
+			if replica.Running {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					err := man.orc.StopReplica(replica.ID)
+					errCh <- errors.Wrapf(err, "error stopping bad replica '%s', volume '%s'", replica.Name, volume.Name)
+				}()
+			}
+			if (*replica.BadTimestamp).Add(KeepBadReplicasPeriod).Before(now) {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					err := man.orc.RemoveInstance(replica.ID)
+					errCh <- errors.Wrapf(err, "error removing old bad replica '%s', volume '%s'", replica.Name, volume.Name)
+				}()
+			}
+		}(replica)
+	}
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+	errs := Errs{}
+	for err := range errCh {
+		if err == nil {
+			continue
+		}
+		errs = append(errs, err)
+		logrus.Errorf("%+v", err)
+	}
+	if len(errs) > 0 {
+		return errs
+	}
 	return nil
 }

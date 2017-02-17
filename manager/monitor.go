@@ -11,23 +11,30 @@ import (
 var (
 	MonitoringPeriod     = time.Second * 2
 	MonitoringMaxRetries = 3
+	CleanupPeriod        = time.Minute * 2
 )
 
-type monitorChan chan<- Event
+type monitorChan struct {
+	monitorCh chan<- Event
+	cleanupCh chan<- Event
+}
 
-func (mc monitorChan) Close() error {
+func (mc *monitorChan) Close() error {
 	defer func() {
 		recover()
 	}()
-	close(mc)
+	defer close(mc.monitorCh)
+	defer close(mc.cleanupCh)
 	return nil
 }
 
 func Monitor(getController types.GetController) types.Monitor {
 	return func(volume *types.VolumeInfo, man types.VolumeManager) io.Closer {
-		ch := make(chan Event)
-		go monitor(getController(volume), volume, man, ch)
-		return monitorChan(ch)
+		monitorCh := make(chan Event)
+		go monitor(getController(volume), volume, man, monitorCh)
+		cleanupCh := make(chan Event)
+		go cleanup(volume, man, cleanupCh)
+		return &monitorChan{monitorCh, cleanupCh}
 	}
 }
 
@@ -44,9 +51,9 @@ func monitor(ctrl types.Controller, volume *types.VolumeInfo, man types.VolumeMa
 					return errors.Wrapf(err.Cause(), "controller failed, volume '%s'", volume.Name)
 				}
 				if failedAttempts++; failedAttempts > MonitoringMaxRetries {
-					return errors.Wrapf(err, "error checking controller '%s'", volume.Name)
+					return errors.Wrapf(err, "repeated errors checking volume '%s', giving up", volume.Name)
 				}
-				logrus.Warnf("%+v", errors.Wrapf(err, "failed checking controller '%s', going to retry", volume.Name))
+				logrus.Warnf("%v", errors.Wrapf(err, "error checking volume '%s', going to retry", volume.Name))
 				return nil
 			}
 			failedAttempts = 0
@@ -58,5 +65,19 @@ func monitor(ctrl types.Controller, volume *types.VolumeInfo, man types.VolumeMa
 				logrus.Errorf("%+v", errors.Wrapf(err, "error detaching failed volume '%s'", volume.Name))
 			}
 		}
+	}
+}
+
+func cleanup(volume *types.VolumeInfo, man types.VolumeManager, ch chan Event) {
+	ticker := NewTicker(CleanupPeriod, ch)
+	defer ticker.Start().Stop()
+	<-ch
+	for range ch {
+		func() {
+			defer ticker.Stop().Start()
+			if err := man.Cleanup(volume); err != nil {
+				logrus.Warnf("%v", errors.Wrapf(err, "error cleaning up volume '%s'", volume.Name))
+			}
+		}()
 	}
 }
