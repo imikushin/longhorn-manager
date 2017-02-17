@@ -40,8 +40,11 @@ func monitor(ctrl types.Controller, volume *types.VolumeInfo, man types.VolumeMa
 		if err := func() error {
 			defer ticker.Stop().Start()
 			if err := man.CheckController(ctrl, volume); err != nil {
+				if err, ok := err.(ControllerError); ok {
+					return errors.Wrapf(err.Cause(), "controller failed, volume '%s'", volume.Name)
+				}
 				if failedAttempts++; failedAttempts > MonitoringMaxRetries {
-					return errors.Wrapf(err, "failed checking controller '%s'", volume.Name)
+					return errors.Wrapf(err, "error checking controller '%s'", volume.Name)
 				}
 				logrus.Warnf("%+v", errors.Wrapf(err, "failed checking controller '%s', going to retry", volume.Name))
 				return nil

@@ -244,7 +244,7 @@ func (man *volumeManager) addingReplicasCount(name string, add int) int {
 func (man *volumeManager) CheckController(ctrl types.Controller, volume *types.VolumeInfo) error {
 	replicas, err := ctrl.GetReplicaStates()
 	if err != nil {
-		return errors.Wrapf(err, "error getting replica states for volume '%s'", volume.Name)
+		return NewControllerError(err)
 	}
 	logrus.Debugf("checking '%s', NumberOfReplicas=%v: controller knows %v replicas", volume.Name, volume.NumberOfReplicas, len(volume.Replicas))
 	goodReplicas := []*types.ReplicaInfo{}

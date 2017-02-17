@@ -14,3 +14,23 @@ func (errs Errs) Error() string {
 	}
 	return strings.Join(ss, "\n\n")
 }
+
+type ControllerError interface {
+	Cause() error
+}
+
+type ctrlErr struct {
+	err error
+}
+
+func NewControllerError(err error) ControllerError {
+	return &ctrlErr{err}
+}
+
+func (e *ctrlErr) Error() string {
+	return e.err.Error()
+}
+
+func (e *ctrlErr) Cause() error {
+	return e.err
+}
