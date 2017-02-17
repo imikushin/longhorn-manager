@@ -32,16 +32,24 @@ var modes = map[string]types.ReplicaMode{
 	"ERR": types.ERR,
 }
 
-func parseReplica(s string) (*types.ReplicaInfo, error) {
+func parseReplica(s string) (*types.ReplicaInfo, string, error) {
 	fields := strings.Fields(s)
+	rwChain := ""
 	if len(fields) < 2 {
-		return nil, errors.Errorf("cannot parse line `%s`", s)
+		return nil, rwChain, errors.Errorf("cannot parse line `%s`", s)
 	}
 	mode, ok := modes[fields[1]]
 	if !ok {
 		mode = types.ERR
 	}
-	if mode == types.RW && len(fields) == 2 {
+	if mode == types.RW {
+		s := strings.TrimSpace(s)
+		s = s[len(fields[0]):]
+		s = strings.TrimSpace(s)
+		s = s[len(fields[1]):]
+		rwChain = strings.TrimSpace(s)
+	}
+	if mode == types.RW && rwChain == "" {
 		mode = types.ERR // TODO it's a workaround, remove when fixed in longhorn
 	}
 	return &types.ReplicaInfo{
@@ -49,7 +57,7 @@ func parseReplica(s string) (*types.ReplicaInfo, error) {
 			Address: fields[0],
 		},
 		Mode: mode,
-	}, nil
+	}, rwChain, nil
 }
 
 func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
@@ -63,14 +71,23 @@ func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
 	go func() {
 		defer wg.Done()
 		defer close(parsingErrCh)
+		rwChain := ""
 		for s := range lineCh {
 			if strings.HasPrefix(s, "ADDRESS") {
 				continue
 			}
-			replica, err := parseReplica(s)
+			replica, chain, err := parseReplica(s)
 			if err != nil {
 				parsingErrCh <- errors.Wrapf(err, "error parsing replica status from `%s`", s)
 				break
+			}
+			if replica.Mode == types.RW {
+				if rwChain == "" {
+					rwChain = chain
+				} else if rwChain != chain {
+					parsingErrCh <- errors.Errorf("different RW replica chain values, volume '%s'", c.name)
+					break
+				}
 			}
 			replicas = append(replicas, replica)
 		}
