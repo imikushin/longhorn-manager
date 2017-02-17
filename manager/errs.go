@@ -23,7 +23,7 @@ type ctrlErr struct {
 	err error
 }
 
-func NewControllerError(err error) ControllerError {
+func NewControllerError(err error) error {
 	return &ctrlErr{err}
 }
 
