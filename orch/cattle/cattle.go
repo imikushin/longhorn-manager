@@ -369,6 +369,30 @@ func (orc *cattleOrc) MarkBadReplica(volumeName string, replica *types.ReplicaIn
 	return errors.Wrapf(err, "error updating metadata")
 }
 
+func (orc *cattleOrc) unMarkBadReplica(volumeName string, replica *types.ReplicaInfo, stack *client.Stack) error {
+	svcColl, err := orc.rancher.Service.List(&client.ListOpts{Filters: map[string]interface{}{
+		"stackId": stack.Id,
+		"name":    replica.Name,
+	}})
+	if err != nil {
+		return errors.Wrapf(err, "error finding replica '%s' for volume '%s'", replica.Name, volumeName)
+	}
+	if len(svcColl.Data) < 1 {
+		return errors.Errorf("Could not find replica named '%s' for volume '%s'", replica.Name, volumeName)
+	}
+	if len(svcColl.Data) > 1 {
+		return errors.Errorf("More than 1 replica named '%s' for volume '%s'", replica.Name, volumeName)
+	}
+	svc := &svcColl.Data[0]
+
+	delete(svc.Metadata, badTimestampProperty)
+	_, err = orc.rancher.Service.Update(svc, map[string]interface{}{
+		"metadata": svc.Metadata,
+	})
+
+	return errors.Wrapf(err, "error updating metadata")
+}
+
 func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*types.ReplicaInfo) (*types.ControllerInfo, error) {
 	stack, err := orc.getStack(volumeName)
 	if err != nil {
@@ -380,6 +404,13 @@ func (orc *cattleOrc) CreateController(volumeName string, replicas map[string]*t
 	volume, err := orc.getVolume(volumeName, stack)
 	if err != nil {
 		return nil, err
+	}
+	for _, replica := range replicas {
+		if replica.BadTimestamp != nil {
+			if err := orc.unMarkBadReplica(volumeName, replica, stack); err != nil {
+				return nil, errors.Wrapf(err, "error unmarking bad replica '%s', volume '%s'", replica.Name, volumeName)
+			}
+		}
 	}
 	volume.Replicas = replicas
 	volume.Controller = &types.ControllerInfo{}
