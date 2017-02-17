@@ -32,29 +32,53 @@ var modes = map[string]types.ReplicaMode{
 	"ERR": types.ERR,
 }
 
+func parseReplica(s string) (*types.ReplicaInfo, error) {
+	fields := strings.Fields(s)
+	if len(fields) < 2 {
+		return nil, errors.Errorf("cannot parse line `%s`", s)
+	}
+	mode, ok := modes[fields[1]]
+	if !ok {
+		mode = types.ERR
+	}
+	if mode == types.RW && len(fields) == 2 {
+		mode = types.ERR // TODO it's a workaround, remove when fixed in longhorn
+	}
+	return &types.ReplicaInfo{
+		InstanceInfo: types.InstanceInfo{
+			Address: fields[0],
+		},
+		Mode: mode,
+	}, nil
+}
+
 func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
 	replicas := []*types.ReplicaInfo{}
 	cancel := make(chan interface{})
 	defer close(cancel)
-	lineCh, errCh := util.CmdOutLines(exec.Command("longhorn", "--url", c.url, "ls"), cancel)
+	lineCh, cliErrCh := util.CmdOutLines(exec.Command("longhorn", "--url", c.url, "ls"), cancel)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
+	parsingErrCh := make(chan error)
 	go func() {
 		defer wg.Done()
+		defer close(parsingErrCh)
 		for s := range lineCh {
 			if strings.HasPrefix(s, "ADDRESS") {
 				continue
 			}
-			fields := strings.Fields(s)
-			replicas = append(replicas, &types.ReplicaInfo{
-				InstanceInfo: types.InstanceInfo{
-					Address: fields[0],
-				},
-				Mode: modes[fields[1]],
-			})
+			replica, err := parseReplica(s)
+			if err != nil {
+				parsingErrCh <- errors.Wrapf(err, "error parsing replica status from `%s`", s)
+				break
+			}
+			replicas = append(replicas, replica)
 		}
 	}()
-	for err := range errCh {
+	for err := range parsingErrCh {
+		return nil, err
+	}
+	for err := range cliErrCh {
 		return nil, err
 	}
 
