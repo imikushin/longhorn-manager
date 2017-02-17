@@ -60,6 +60,19 @@ func parseReplica(s string) (*types.ReplicaInfo, string, error) {
 	}, rwChain, nil
 }
 
+func trimChain(s string) string {
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		s = strings.TrimPrefix(s, "[")
+		s = strings.TrimSuffix(s, "]")
+		fields := strings.Fields(s)
+		if len(fields) > 0 && strings.HasPrefix(fields[0], "volume-head-") {
+			s = s[len(fields[0]):]
+			s = strings.TrimSpace(s)
+		}
+	}
+	return s
+}
+
 func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
 	replicas := []*types.ReplicaInfo{}
 	cancel := make(chan interface{})
@@ -83,8 +96,8 @@ func (c *controller) GetReplicaStates() ([]*types.ReplicaInfo, error) {
 			}
 			if replica.Mode == types.RW {
 				if rwChain == "" {
-					rwChain = chain
-				} else if rwChain != chain {
+					rwChain = trimChain(chain)
+				} else if rwChain != trimChain(chain) {
 					parsingErrCh <- errors.Errorf("different RW replica chain values, volume '%s'", c.name)
 					break
 				}
